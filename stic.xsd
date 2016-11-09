@@ -1,0 +1,250 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<xs:schema attributeFormDefault="unqualified" elementFormDefault="qualified" xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <!--xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"-->
+  <!--xsi:noNamespaceSchemaLocation="XMLSchema.xsd"-->
+  <xs:annotation>
+    <xs:documentation>
+      This is a schema that defines the xml for stic (積層端子位地チェック) input. </xs:documentation>
+  </xs:annotation>
+  <xs:element name="stackedChip">
+    <xs:annotation>
+      <xs:documentation>Stacked chip contains individual chips possibly rotated and resized.</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="topCell">
+          <xs:annotation>
+            <xs:documentation>The top level CDL subckt name.</xs:documentation>
+          </xs:annotation>
+          <xs:simpleType>
+            <xs:restriction base="xs:string">
+              <xs:pattern value="[a-zA-Z][\S]*" />
+            </xs:restriction>
+          </xs:simpleType>
+        </xs:element>
+        <xs:element name="topCdlFile">
+          <xs:annotation>
+            <xs:documentation>The CDL file name for the virtual top level circuit and individual chip connections.</xs:documentation>
+          </xs:annotation>
+          <xs:simpleType>
+            <xs:restriction base="xs:string">
+              <xs:pattern value="[\S]*" />
+            </xs:restriction>
+          </xs:simpleType>
+        </xs:element>
+        <xs:element name="userUnits">
+          <xs:annotation>
+            <xs:documentation>User units for final result (um or nm).</xs:documentation>
+          </xs:annotation>
+          <xs:simpleType>
+            <xs:restriction base="xs:string">
+              <xs:enumeration value="um">
+                <xs:annotation>
+                  <xs:documentation>microns. 1e-6m.</xs:documentation>
+                </xs:annotation>
+              </xs:enumeration>
+              <xs:enumeration value="nm">
+                <xs:annotation>
+                  <xs:documentation>nanometers. 1e-9m.</xs:documentation>
+                </xs:annotation>
+              </xs:enumeration>
+            </xs:restriction>
+          </xs:simpleType>
+        </xs:element>
+        <xs:element name="chip" type="chipType" maxOccurs="unbounded">
+          <xs:annotation>
+            <xs:documentation>Definition of one chip placement.</xs:documentation>
+          </xs:annotation>
+        </xs:element>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+  <xs:complexType name="chipType">
+    <xs:annotation xmlns:xs="http://www.w3.org/2001/XMLSchema">
+      <xs:documentation>The placement info and netlist correspondence for one chip.</xs:documentation>
+    </xs:annotation>
+    <xs:sequence>
+      <xs:element name="instanceName">
+        <xs:annotation>
+          <xs:documentation>The instance name in the top level CDL netlist.</xs:documentation>
+        </xs:annotation>
+        <xs:simpleType>
+          <xs:restriction base="xs:string">
+            <xs:pattern value="X[\S]*" />
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:element>
+      <xs:element name="cdlFileName">
+        <xs:annotation>
+          <xs:documentation>The CDL file with the chip definition (if excluded, use the top level netlist).</xs:documentation>
+        </xs:annotation>
+        <xs:simpleType>
+          <xs:restriction base="xs:string">
+            <xs:pattern value="[\S]*" />
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:element>
+      <xs:element name="topLayoutName">
+        <xs:annotation>
+          <xs:documentation>The name of the chip in GDS file.</xs:documentation>
+        </xs:annotation>
+        <xs:simpleType>
+          <xs:restriction base="xs:string">
+            <xs:pattern value="[\S]*" />
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:element>
+      <xs:element name="gdsFileName">
+        <xs:annotation>
+          <xs:documentation>The GDS file name that contains the chip definition.</xs:documentation>
+        </xs:annotation>
+        <xs:simpleType>
+          <xs:restriction base="xs:string">
+            <xs:pattern value="[\S]*" />
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:element>
+      <xs:element name="orientation" type="orientationType">
+        <xs:annotation>
+          <xs:documentation>The orientation of the chip placement.</xs:documentation>
+        </xs:annotation>
+      </xs:element>
+      <xs:element name="offset" type="offsetType">
+        <xs:annotation>
+          <xs:documentation>The offset of the chip placement.</xs:documentation>
+        </xs:annotation>
+      </xs:element>
+      <xs:element name="shrink" default="1.0">
+        <xs:annotation>
+          <xs:documentation>The shrink value of the chip placement (0.100~1.000)</xs:documentation>
+        </xs:annotation>
+        <xs:simpleType>
+          <xs:restriction base="xs:decimal">
+            <xs:fractionDigits value="3"></xs:fractionDigits>
+            <xs:minInclusive value="0.1"></xs:minInclusive>
+            <xs:maxInclusive value="1.0"></xs:maxInclusive>
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:element>
+      <xs:element name="port" type="portType" maxOccurs="unbounded">
+        <xs:annotation>
+          <xs:documentation>Definition of one port type. (eg. TSV, COIL)</xs:documentation>
+        </xs:annotation>
+      </xs:element>
+      <xs:element name="portText" type="portTextType" maxOccurs="unbounded">
+        <xs:annotation>
+          <xs:documentation>Definition of one port text layer.</xs:documentation>
+        </xs:annotation>
+      </xs:element>
+    </xs:sequence>
+  </xs:complexType>
+  <xs:simpleType name="orientationType">
+    <xs:annotation>
+      <xs:documentation>The rotation and/or mirroring.</xs:documentation>
+    </xs:annotation>
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="R0" />
+      <xs:enumeration value="R90" />
+      <xs:enumeration value="R180" />
+      <xs:enumeration value="R270" />
+      <xs:enumeration value="MX" />
+      <xs:enumeration value="MXR90" />
+      <xs:enumeration value="MY" />
+      <xs:enumeration value="MYR90" />
+    </xs:restriction>
+  </xs:simpleType>
+  <xs:complexType name="offsetType">
+    <xs:annotation>
+      <xs:documentation>The offset.</xs:documentation>
+    </xs:annotation>
+    <xs:sequence>
+      <xs:element name="x">
+        <xs:simpleType>
+          <xs:restriction base="xs:decimal">
+            <xs:fractionDigits value="4"></xs:fractionDigits>
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:element>
+      <xs:element name="y">
+        <xs:simpleType>
+          <xs:restriction base="xs:decimal">
+            <xs:fractionDigits value="4"></xs:fractionDigits>
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:element>
+    </xs:sequence>
+  </xs:complexType>
+  <xs:complexType name="portType">
+    <xs:sequence>
+      <xs:element name="type">
+        <xs:annotation>
+          <xs:documentation>The type of the port. (coinciding port types must match.)</xs:documentation>
+        </xs:annotation>
+        <xs:simpleType>
+          <xs:restriction base="xs:string">
+            <xs:enumeration value="TSV" />
+            <xs:enumeration value="COIL" />
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:element>
+      <xs:element name="layerNumber">
+        <xs:annotation>
+          <xs:documentation>Layer number of port recognition layer.</xs:documentation>
+        </xs:annotation>
+        <xs:simpleType>
+          <xs:restriction base="xs:integer">
+            <xs:minInclusive value="0"></xs:minInclusive>
+            <xs:maxInclusive value="255"></xs:maxInclusive>
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:element>
+      <xs:element name="dataType">
+        <xs:annotation>
+          <xs:documentation>Datatype of the port recognition layer.</xs:documentation>
+        </xs:annotation>
+        <xs:simpleType>
+          <xs:restriction base="xs:integer">
+            <xs:minInclusive value="0"></xs:minInclusive>
+            <xs:maxInclusive value="255"></xs:maxInclusive>
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:element>
+      <xs:element name="portCell" maxOccurs="unbounded">
+        <xs:annotation>
+          <xs:documentation>Name of the layout port cells. The origin of the port cells are checked.</xs:documentation>
+        </xs:annotation>
+        <xs:simpleType>
+          <xs:restriction base="xs:string">
+            <xs:pattern value="[\S]*" />
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:element>
+    </xs:sequence>
+  </xs:complexType>
+  <xs:complexType name="portTextType">
+    <xs:sequence>
+      <xs:element name="layerNumber">
+        <xs:annotation>
+          <xs:documentation>Layer number of top level port text.</xs:documentation>
+        </xs:annotation>
+        <xs:simpleType>
+          <xs:restriction base="xs:integer">
+            <xs:minInclusive value="0"></xs:minInclusive>
+            <xs:maxInclusive value="255"></xs:maxInclusive>
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:element>
+      <xs:element name="textType">
+        <xs:annotation>
+          <xs:documentation>Datatype of the top level text.</xs:documentation>
+        </xs:annotation>
+        <xs:simpleType>
+          <xs:restriction base="xs:integer">
+            <xs:minInclusive value="0"></xs:minInclusive>
+            <xs:maxInclusive value="255"></xs:maxInclusive>
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:element>
+    </xs:sequence>
+  </xs:complexType>
+</xs:schema>
