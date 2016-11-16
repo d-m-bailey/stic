@@ -15,6 +15,10 @@
 
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+    requires python-gdsii, numpy
+    pip install http://pypi.python.org/packages/source/p/python-gdsii/python-gdsii-0.2.1.tar.gz
+    pip install numpy
 """
 
 from __future__ import division
@@ -32,13 +36,13 @@ from gdsii.record import *
 import numpy as np
 from operator import attrgetter
 
-def OpenFile(theFileName):
+def OpenFile(theFileName, theMode="rt"):
     """Open a file (possibly compressed gz) and return file"""
     try:
         if theFileName.endswith(".gz"):
-            myFile = gzip.open(theFileName, mode="rt")
+            myFile = gzip.open(theFileName, mode=theMode)
         else:
-            myFile = open(theFileName)
+            myFile = open(theFileName, mode=theMode)
     except IOError as myErrorDetail:
         print("ERROR: Could not open " + theFileName + " " + str(myErrorDetail.args))
         raise IOError
@@ -50,7 +54,7 @@ def GetOrientation(theElement):
     R0, R90, R180, R270, MX, MXR90, MY, MYR90
     Doesn't handle magnification.
     """
-    if theElement.strans & int('100000000000000', 2):
+    if theElement.strans and theElement.strans & int('100000000000000', 2):
         print("mirrored")
         if not theElement.angle: return "MX"
         if theElement.angle == 90: return "MXR90"
@@ -118,7 +122,7 @@ def IsBox(theBox):
     if len(theBox) != 5: return False  # Must have 5 points.
     if theBox[0] != theBox[4]: return False  # Must start and stop at same point.
     myCheckX = True if theBox[0][1] != theBox[1][1] else False
-    for point_it in range(3):
+    for point_it in range(4):
         if myCheckX:
             if theBox[point_it][0] != theBox[point_it+1][0]: return False
             if theBox[point_it][1] == theBox[point_it+1][1]: return False
@@ -205,7 +209,7 @@ def CreateStructureIndex(theGdsiiLib):
     myStructureIndex = {}
     for structure_it in theGdsiiLib:
         structure_it.processed = False
-        myStructureIndex[structure_it.name] = structure_it
+        myStructureIndex[structure_it.name.decode('utf-8')] = structure_it
     return myStructureIndex
 
 def PromoteCellPorts(thePortLayers, thePortCellList, thePortType, theStructureIndex, theTopLayout, 
@@ -223,20 +227,22 @@ def PromoteCellPorts(thePortLayers, thePortCellList, thePortType, theStructureIn
         myStructure.ports = []
         for element_it in myStructure:
             if element_it.__class__.__name__ == 'SRef':
-                myStructure.ports += PromoteCellPorts(thePortLayers, thePortCellList, thePortType,
-                                                      theStructureIndex, element_it.struct_name, 
+                myStructure.ports += PromoteCellPorts(thePortLayers, thePortCellList,
+                                                      thePortType, theStructureIndex,
+                                                      element_it.struct_name.decode('utf-8'),
                                                       GetOrientation(element_it), element_it.xy)
             elif element_it.__class__.__name__ == 'ARef':
-                myXStep = (element_it.xy[2][0] - element_it.xy[0][0]) / (element_it.cols - 1)
-                myYStep = (element_it.xy[1][1] - element_it.xy[0][1]) / (element_it.rows - 1)
+                myXStep = (element_it.xy[1][0] - element_it.xy[0][0]) / element_it.cols
+                myYStep = (element_it.xy[2][1] - element_it.xy[0][1]) / element_it.rows
                 myY = element_it.xy[0][1]
                 myOrientation = GetOrientation(element_it)
+                myChildName = element_it.struct_name.decode('utf-8')
                 for row_it in range(element_it.rows):
                     myX = element_it.xy[0][0]
                     for column_it in range(element_it.cols):
                         myStructure.ports += PromoteCellPorts(thePortLayers, thePortCellList,
                                                               thePortType, theStructureIndex,
-                                                              element_it.struct_name, 
+                                                              myChildName,
                                                               myOrientation, [(myX, myY)])
                         myX += myXStep
                     myY += myYStep
@@ -264,7 +270,6 @@ def PromoteCellPorts(thePortLayers, thePortCellList, thePortType, theStructureIn
         for port_it in myStructure.ports:
             myPorts.append({'type': port_it['type'], 'xy': Transform(port_it['xy'], myTransform),
                 'box': NormalizeBox(Transform(port_it['box'], myTransform))})
-#    print(theTopLayout, myPorts)
     return myPorts
         
 def LoadGdsPorts(theChip, theStructureIndex, theTopLayout):
@@ -284,7 +289,6 @@ def LoadGdsPorts(theChip, theStructureIndex, theTopLayout):
             myPortType[portCell_it.text] = port_it.find('type').text
     myPortList = PromoteCellPorts(myPortLayers, myPortCellList, myPortType, 
                                   theStructureIndex, theTopLayout)
-#    print(myPortList)
     return myPortList 
 
 def LoadGdsText(theChip, theTopStructure):
@@ -301,7 +305,7 @@ def LoadGdsText(theChip, theTopStructure):
         if element_it.__class__.__name__ == 'Text':
             myLayerType = str(element_it.layer) + "-" + str(element_it.text_type)
             if myLayerType in myTextLayers:
-                myTextList.append({'text': element_it.string, 'xy': element_it.xy})
+                myTextList.append({'text': element_it.string.decode('utf-8'), 'xy': element_it.xy})
     return myTextList
 
 def AssignPorts(thePortList, theTextList, theTopLayout):
@@ -315,15 +319,17 @@ def AssignPorts(thePortList, theTextList, theTopLayout):
         myTextFound = False
         for port_it in thePortList:
             if BoxContains(port_it['box'], text_it['xy'][0]):
-                if myTextFound:
+                if myTextFound and myXY != port_it['xy']:
                     print("Warning: Text in multiple ports: " + text_it['text']
-                          + " at " + str(text_it['xy']) + " in " + theTopLayout)
+                          + " at " + str(myXY) + " and " + str(text_it['xy'])
+                          + " in " + theTopLayout)
                 else:
                     myNamedPortList.append({'text': text_it['text'],
                                             'type': port_it['type'],
                                             'xy': port_it['xy']})
                     port_it['assigned'] = True
                     myTextFound = True
+                    myXY = port_it['xy']
         if not myTextFound:
             print("Warning: Unable to map text " + text_it['text'] + " at "
                   + str(text_it['xy']) + " in " + theTopLayout) 
@@ -332,21 +338,18 @@ def AssignPorts(thePortList, theTextList, theTopLayout):
             myNamedPortList.append({'text': "",
                                     'type': port_it['type'],
                                     'xy': port_it['xy']})
-#    print(myNamedPortList)
     return myNamedPortList
 
 def TranslateChipPorts(thePortList, theOrientation, theTranslation, theShrink):
-    """Return a list of ports and transformed to final position.
+    """Return a list of ports and transformed to final position in user units.
     return: [{'text': portName, 'type': portType, 'xy': position}, ...]
     """
     myInstancePortList = []
-#    print(theShrink)
     myTransform = GetTransform(theOrientation, theTranslation, theShrink)
     for port_it in thePortList:
         myInstancePortList.append({'text': port_it['text'],
                                    'type': port_it['type'],
                                    'xy': Transform(port_it['xy'], myTransform)})
-#    print("transformed " + str(myInstancePortList))
     return myInstancePortList
 
 def GetGdsPortData(theChip, theUserUnits):
@@ -358,16 +361,18 @@ def GetGdsPortData(theChip, theUserUnits):
     myTopLayoutName = theChip.find('topLayoutName').text
     myGdsFileName = theChip.find('gdsFileName').text
     myOrientation = theChip.find('orientation').text
-    myOffset = theChip.find('offset')
-    myX = myOffset.find('x').text
-    myY = myOffset.find('y').text
     myShrink = theChip.find('shrink').text
-    myGdsFile = OpenFile(myGdsFileName)
+    print(myTopLayoutName, myGdsFileName)
+    myGdsFile = OpenFile(myGdsFileName, "rb")
     myGdsiiLib = Library.load(myGdsFile)
+    myInternalDbuPerUU = myGdsiiLib.logical_unit / myGdsiiLib.physical_unit
+    myOffset = theChip.find('offset')
+    myX = float(myOffset.find('x').text) * myInternalDbuPerUU
+    myY = float(myOffset.find('y').text) * myInternalDbuPerUU
     if theUserUnits == 'um':
-        myDbuPerUU = 1e-6 / myGdsiiLib.physical_unit
+        myOutputDbuPerUU = 1e-6 / myGdsiiLib.physical_unit
     elif theUserUnits == 'nm':
-        myDbuPerUU = 1e-9 / myGdsiiLib.physical_unit
+        myOutputDbuPerUU = 1e-9 / myGdsiiLib.physical_unit
     else:
         raise ValueError 
     myStructureIndex = CreateStructureIndex(myGdsiiLib)
@@ -375,7 +380,7 @@ def GetGdsPortData(theChip, theUserUnits):
     myTextList = LoadGdsText(theChip, myStructureIndex[myTopLayoutName])
     myNamedPortList = AssignPorts(myPortList, myTextList, myTopLayoutName)
     return TranslateChipPorts(myNamedPortList, myOrientation, [(myX, myY)],
-                              float(myShrink) / myDbuPerUU)
+                              float(myShrink) / myOutputDbuPerUU)
 
 def PromoteChipPorts(theChip, theInstances, theUserUnits):
     """Promote individual chip ports to virtual top level.
@@ -398,11 +403,9 @@ def PromoteChipPorts(theChip, theInstances, theUserUnits):
             myKey = (myInstanceName, "{0:.6g}".format(port_it['xy'][0][0]),
                      "{0:.6g}".format(port_it['xy'][0][1]), port_it['type'], "")
             myMappedPorts[myKey] = ""
-#    print(myInstanceName, myMasterSubckt, myCdlPortMap)
-#    print(myMappedPorts)
     return myMappedPorts
     
-def CheckPortData(thePortData, theInstances):
+def CheckPortData(thePortData, theInstances, theOutputFile):
     """Check the promoted ports' alignment."""
     myFinalPorts = set()
     for key_it in thePortData:  # Create top level port list.
@@ -413,7 +416,7 @@ def CheckPortData(thePortData, theInstances):
     mySortedInstances = sorted(theInstances)
     for key_it in mySortedInstances:
         myOutput += "," + key_it + "(" + theInstances[key_it]['master'] + ")"
-    print(myOutput)
+    theOutputFile.write(myOutput + "\n")
     for port_it in sorted(myFinalPorts):
         (myText, myType, myX, myY) = port_it
         myPortOk = "O"
@@ -429,25 +432,28 @@ def CheckPortData(thePortData, theInstances):
                 else:  # no matching port for this instance
                     myOutput += ",?"
                     myPortOk = "X"
-        print(myPortOk + "," + myOutput)
+        theOutputFile.write(myPortOk + "," + myOutput + "\n")
 
 def main(argv):
     """Check the correspondence of stacked GDSII chip text
 
     usage: stic.py sticXmlFile
     """
-    if len(argv) != 1:
-        print("usage: stic.py sticXmlFile")
+    if not (1 <= len(argv) <= 2):
+        print("usage: stic.py sticXmlFile [outputFile]")
         return
     myStackedChip = ET.parse(argv[0]).getroot()  # Parse the xml file.
     myUserUnits = myStackedChip.find('userUnits').text
     myInstances = ReadTopCdlFile(myStackedChip)
-#    print(myInstances)
     myPortData = {}
     for chip_it in myStackedChip.findall('chip'):
         myPortData.update(PromoteChipPorts(chip_it, myInstances, myUserUnits))
-#    print(myPortData)
-    CheckPortData(myPortData, myInstances)
+    if len(argv) == 2:
+        print("Writing results to " + argv[1])
+        myOutputFile = open(argv[1], "w")
+    else:
+        myOutputFile = sys.stdout
+    CheckPortData(myPortData, myInstances, myOutputFile)
 
 if __name__ == '__main__':
     main(sys.argv[1:])
