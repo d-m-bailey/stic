@@ -1,7 +1,5 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<xs:schema attributeFormDefault="unqualified" elementFormDefault="qualified" xmlns:xs="http://www.w3.org/2001/XMLSchema">
-  <!--xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"-->
-  <!--xsi:noNamespaceSchemaLocation="XMLSchema.xsd"-->
+<xs:schema attributeFormDefault="unqualified" elementFormDefault="qualified" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="XMLSchema.xsd">
   <xs:annotation>
     <xs:documentation>
       This is a schema that defines the xml for stic (積層端子位地チェック) input. </xs:documentation>
@@ -155,7 +153,7 @@
   </xs:simpleType>
   <xs:complexType name="offsetType">
     <xs:annotation>
-      <xs:documentation>The offset.</xs:documentation>
+      <xs:documentation>The offset in user units.</xs:documentation>
     </xs:annotation>
     <xs:sequence>
       <xs:element name="x">
@@ -182,8 +180,7 @@
         </xs:annotation>
         <xs:simpleType>
           <xs:restriction base="xs:string">
-            <xs:enumeration value="TSV" />
-            <xs:enumeration value="COIL" />
+            <xs:pattern value="(TSV|COIL)[\S]*" />
           </xs:restriction>
         </xs:simpleType>
       </xs:element>
@@ -216,6 +213,17 @@
         <xs:simpleType>
           <xs:restriction base="xs:string">
             <xs:pattern value="[\S]*" />
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:element>
+      <xs:element name="tolerance" default="0.">
+        <xs:annotation>
+          <xs:documentation>Allowable coordinate offset in (top) user units.</xs:documentation>
+        </xs:annotation>
+        <xs:simpleType>
+          <xs:restriction base="xs:decimal">
+            <xs:fractionDigits value="4"></xs:fractionDigits>
+            <xs:minInclusive value="0"></xs:minInclusive>
           </xs:restriction>
         </xs:simpleType>
       </xs:element>
