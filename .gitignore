@@ -1,0 +1,14 @@
+datatypes.dtd
+out.*
+python-gdsii-0.2.1.tar.gz
+*.txt
+LICENSE
+README.md
+stic
+stic.py.*
+stic.xsd.*
+*.cdl*
+*.gds*
+*.xml
+XMLSchema.dtd
+XMLSchema.xsd

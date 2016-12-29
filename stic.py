@@ -91,12 +91,20 @@ def GetTransform(theOrientation, theTranslation):
         myRotation = np.array([(-1,0,0), (0,1,0), (0,0,1)], dtype=np.int64)
     if theOrientation == "MYR90":
         myRotation = np.array([(0,-1,0), (-1,0,0), (0,0,1)], dtype=np.int64)
-    myTranslation = np.array([(1,0,0),(0,1,0),
-                              (theTranslation[0][0],theTranslation[0][1],1)], dtype=np.int64)
+    myTranslation = np.array([(1,0,0), (0,1,0), (theTranslation[0][0],theTranslation[0][1],1)],
+                             dtype=np.int64)
 #    myScale = np.array([(float(theScale),0.,0.),(0.,float(theScale),0.),(0.,0.,1.)], dtype=np.float64)
 #    myTransform = np.dot(np.dot(myScale, myRotation), myTranslation)
     myTransform = np.dot(myRotation, myTranslation)
     return myTransform
+
+def FlipPort(theWinding, theOrientation):
+    """Return 'R' for clockwise, 'L' for counter-clockwise."""
+    if theOrientation.startswith("R"):
+        myNewWinding = theWinding
+    else:
+        myNewWinding = 'R' if theWinding == 'L' else 'L'
+    return myNewWinding
 
 def Transform(thePointList, theTransform):
     """Returns a list of transformed points.
@@ -138,6 +146,7 @@ def PrintParameters(theStackedChip):
     print("Top CDL " + theStackedChip.find('topCdlFile').text
           + ", Top SUBCKT " + theStackedChip.find('topCell').text)
     print("User units " + theStackedChip.find('userUnits').text)
+    print("Tolerance: " + theStackedChip.find('tolerance').text)
     chipCount = 0
     for chip_it in theStackedChip.findall('chip'):
         chipCount += 1
@@ -280,7 +289,7 @@ def PromoteCellPorts(thePortLayers, thePortCellList, thePortType, theStructureIn
                      theOrientation="R0", theTranslation=[(0,0)]):
     """Promote low level cell ports to top level.
 
-    return: [{'type': portType, 'xy': pointList[1], 'box': pointList[2]}, ...]
+    return: [{'type': portType, 'xy': pointList[1], 'box': pointList[2], 'winding': R|L}, ...]
     errors: portLayers not in portCells, non-rectangular ports, non-boundary type ports
     """
     if not theTopLayout in theStructureIndex:
@@ -316,14 +325,10 @@ def PromoteCellPorts(thePortLayers, thePortCellList, thePortType, theStructureIn
                     if theTopLayout not in thePortCellList[myLayerType]:
                         print("Warning: Layer " + myLayerType + " in unexpected cell " 
                               + theTopLayout + " ignored.")
-##                    elif not IsBox(element_it.xy):
-##                        print("Warning: Layer-datatype " + myLayerType + " at "
-##                              + str(element_it.xy) + " in " + theTopLayout
-##                              + " is not rectangular.")
                     else:
                         myBox = GetBox(element_it.xy)
                         myStructure.ports.append({'type': thePortType[theTopLayout],
-                                                  'xy': [(0,0)], 'box': myBox})
+                                                  'xy': [(0,0)], 'box': myBox, 'winding': 'R'})
             elif hasattr(element_it, 'layer') and hasattr(element_it, 'data_type'):
                 myLayerType = str(element_it.layer) + "-" + str(element_it.data_type)
                 if myLayerType in thePortLayers:
@@ -335,7 +340,8 @@ def PromoteCellPorts(thePortLayers, thePortCellList, thePortType, theStructureIn
         myTransform = GetTransform(theOrientation, theTranslation)
         for port_it in myStructure.ports:
             myPorts.append({'type': port_it['type'], 'xy': Transform(port_it['xy'], myTransform),
-                'box': NormalizeBox(Transform(port_it['box'], myTransform))})
+                            'box': NormalizeBox(Transform(port_it['box'], myTransform)),
+                            'winding': FlipPort(port_it['winding'], theOrientation)})
     return myPorts
         
 def LoadGdsPorts(theChip, theStructureIndex, theTopLayout):
@@ -377,12 +383,14 @@ def LoadGdsText(theChip, theTopStructure):
 
 def UserScale(thePoint, theScale):
     """Returns thePoint scaled to used coordinates"""
-    return("({0:.12g}, {1:.12g})".format(thePoint[0][0] / theScale, thePoint[0][1] / theScale))
+    myX = thePoint[0][0] / theScale
+    myY = thePoint[0][1] / theScale
+    return("({0:.12g}, {1:.12g})".format(myX, myY))
 
 def AssignPorts(thePortList, theTextList, theTopLayout, theDbuPerUU):
     """Return a list of text with port type centered at port origin.
 
-    return: [{'text': port, 'type': portType, 'xy': portCenter}, ...]
+    return: [{'text': port, 'type': portType, 'xy': portCenter, 'winding': R|L}, ...]
     errors: text mapped to multiple ports, text not mapped to any port.
     """
     myNamedPortList = []
@@ -400,7 +408,8 @@ def AssignPorts(thePortList, theTextList, theTopLayout, theDbuPerUU):
                 else:
                     myNamedPortList.append({'text': text_it['text'],
                                             'type': port_it['type'],
-                                            'xy': port_it['xy']})
+                                            'xy': port_it['xy'],
+                                            'winding': port_it['winding']})
                     port_it['assigned'] = True
                     myTextFound = True
                     myXY = port_it['xy']
@@ -411,14 +420,15 @@ def AssignPorts(thePortList, theTextList, theTopLayout, theDbuPerUU):
         if not 'assigned' in port_it:  # Blank ports.
             myNamedPortList.append({'text': "",
                                     'type': port_it['type'],
-                                    'xy': port_it['xy']})
+                                    'xy': port_it['xy'],
+                                    'winding': port_it['winding']})
             myBlankPortCount += 1
     print(str(myUnmapCount) + " text ignored. " + str(myBlankPortCount) + " ports without text.")
     return myNamedPortList
 
 def TranslateChipPorts(thePortList, theOrientation, theTranslation, theScale):
     """Return a list of ports and transformed to final position in user units.
-    return: [{'text': portName, 'type': portType, 'xy': position}, ...]
+    return: [{'text': portName, 'type': portType, 'xy': position, 'winding': L|R}, ...]
     """
     myInstancePortList = []
     myTransform = GetTransform(theOrientation, theTranslation)
@@ -426,7 +436,8 @@ def TranslateChipPorts(thePortList, theOrientation, theTranslation, theScale):
         myInstancePortList.append({'text': port_it['text'],
                                    'type': port_it['type'],
                                    'xy': UserScale(Transform(port_it['xy'], myTransform),
-                                                   theScale)})
+                                                   theScale),
+                                   'winding': FlipPort(port_it['winding'], theOrientation)})
     return myInstancePortList
 
 def GetGdsPortData(theChip, theUserUnits):
@@ -438,7 +449,7 @@ def GetGdsPortData(theChip, theUserUnits):
     myTopLayoutName = theChip.find('topLayoutName').text
     myGdsFileName = theChip.find('gdsFileName').text
     myOrientation = theChip.find('orientation').text
-    myShrink = theChip.find('shrink').text
+    myShrink = float(theChip.find('shrink').text)
     print("Reading " + myGdsFileName)
     myGdsFile = OpenFile(myGdsFileName, "rb")
     myGdsiiLib = Library.load(myGdsFile)
@@ -459,7 +470,7 @@ def GetGdsPortData(theChip, theUserUnits):
     print("Assigning text...")
     myNamedPortList = AssignPorts(myPortList, myTextList, myTopLayoutName, myInternalDbuPerUU)
     return TranslateChipPorts(myNamedPortList, myOrientation, [(myX, myY)],
-                              myOutputDbuPerUU / float(myShrink))
+                              myOutputDbuPerUU / myShrink)
 
 def PromoteChipPorts(theChip, theInstances, theUserUnits):
     """Promote individual chip ports to virtual top level.
@@ -477,16 +488,21 @@ def PromoteChipPorts(theChip, theInstances, theUserUnits):
         myMappedPorts[myKey] = net_it
     for port_it in myGdsPortData:
         if port_it['text']:
-            myKey = (myInstanceName, port_it['xy'], port_it['type'],
-                     myCdlPortMap[port_it['text']])
-            myMappedPorts[myKey] = port_it['text']
+            if port_it['text'] in myCdlPortMap:
+                myKey = (myInstanceName, port_it['xy'], port_it['type'],
+                         myCdlPortMap[port_it['text']])
+                myMappedPorts[myKey] = (port_it['text'], port_it['winding'])
+            else:
+                print("ERROR: layout port " + port_it['text']
+                      + " at " + port_it['xy'] + " of " + theChip.find('topLayoutName').text
+                      + " in " + theChip.find('gdsFileName').text
+                      + " not in subckt " + myMasterSubckt + " of " + myCdlFile) 
         else:  # unlabeled port
             if port_it['type'] == "TSV":
                 myKey = (myInstanceName, port_it['xy'], port_it['type'], "")
-                myMappedPorts[myKey] = ""
+                myMappedPorts[myKey] = ("", "")
             else:
-                print("ERROR: " + port_it['type'] + " without text at "
-                      + UserScale(port_it['xy'])) 
+                print("ERROR: " + port_it['type'] + " without text at " + port_it['xy'])
     return myMappedPorts
 
 def CreateSortKey(theValue):
@@ -523,62 +539,168 @@ def CreateSortKey(theValue):
                 myMatch.group(1), int(myMatch.group(2)), 1e6+float(myX), 1e6+float(myY)))
     return("{0:s} {1:+020.5f} {2:+020.5f}".format(myText, 1e6+float(myX), 1e6+float(myY)))
 
-def CheckPortData(thePortData, theInstances, theOutputFile, theNetConnections):
-    """Check the promoted ports' alignment."""
+def CreateSearchList(theXY, theTolerance):
+    """Return a list of coordinates for 2x2 array of points rounded to tolerance.
+
+    return ["(x, y)", "(x, y+t)", "(x+t, y)", "(x+t, y+t)", ...]
+    """
+    if theTolerance > 0.000001:  # ignore tolerance less than 1e-6 user units
+        (myX, myY) = literal_eval(theXY)
+        myRoundedX = round(myX / theTolerance) * theTolerance
+        myRoundedY = round(myY / theTolerance) * theTolerance
+        myKeyList = []
+        for x_offset in range(0, 2):
+            for y_offset in range(0, 2):
+                myKeyList.append(
+                    "({0:.12g}, {1:.12g})".format(myRoundedX + theTolerance * x_offset,
+                                                  myRoundedY + theTolerance * y_offset))
+    else:
+        myKeyList = [theXY]
+    return myKeyList
+
+def CreateXyList(thePortIndex, theSortedPorts, theTolerance):
+    """Return a list of actual point coordinates with the tolerance of first point.
+
+    return ["(x, y)", ...]
+    """
+    (myText, myType, myXY) = theSortedPorts[thePortIndex]
+    myXyList = [myXY]
+    (myX, myY) = literal_eval(myXY)
+    for nextPort_it in range(thePortIndex+1, len(theSortedPorts)):
+        # Get XY of ports within tolerance
+        (myNextText, myNextType, myNextXY) = theSortedPorts[nextPort_it]
+        if not (myNextText == myText and myNextType == myType): break
+        (myNextX, myNextY) = literal_eval(myNextXY)
+        if round(abs(myNextX - myX) / theTolerance * 100000) > 100000: break
+        if round(abs(myNextY - myY) / theTolerance * 100000) <= 100000:
+            myXyList.append(myNextXY)
+    return myXyList
+
+def CreatePortLists(thePortData, theTolerance):
+    """Create a list of unique named ports and lists of blank ports at tolerance.
+
+    Returns: (set((text, type, xy), ...), {(type, roundedXY): set(xy, ...)})
+    """
     myFinalPorts = set()
-    myUsedCoils = set()
+    myBlankPorts = {}
     for key_it in thePortData:  # Create top level port list.
         (myInstance, myXY, myType, myText) = key_it
-        if myText != "":
+        if myText == "":
+            myKeyList = CreateSearchList(myXY, theTolerance)
+            for key_it in myKeyList:
+                myKey = (myType, key_it)
+                if myKey not in myBlankPorts:
+                    myBlankPorts[myKey] = set()
+                myBlankPorts[myKey].add(myXY)
+        else:
             myFinalPorts.add((myText, myType, myXY))
+    return((sorted(myFinalPorts, key=CreateSortKey), myBlankPorts))
+
+def WithinTolerance(theFirstXY, theSecondXY, theTolerance):
+    """True if the x and y coordinates of 2 points are within the tolerance."""
+    (myFirstX, myFirstY) = literal_eval(theFirstXY)
+    (mySecondX, mySecondY) = literal_eval(theSecondXY)
+    if round(abs(myFirstX - mySecondX) / theTolerance * 100000) > 100000: return False
+    if round(abs(myFirstY - mySecondY) / theTolerance * 100000) > 100000: return False
+    return True
+
+def HasBlankPort(theInstance, theType, theXY, theTolerance, theBlankPorts, thePortData):
+    """True if there is a blank port on instance within tolerance."""
+    myKeyList = CreateSearchList(theXY, theTolerance)
+    myPortFound = False
+    for key_it in myKeyList:
+        myBlankKey = (theType, key_it)
+        if myBlankKey in theBlankPorts:
+            for blankXY_it in theBlankPorts[myBlankKey]:
+                if WithinTolerance(theXY, blankXY_it, theTolerance):     
+                    myPortKey = (theInstance, blankXY_it, theType, "")
+                    if myPortKey in thePortData:
+                        return True
+    return False
+
+def MultiplePorts(thePortIndex, theSortedPorts, thePrintedPorts):
+    """True if there are multiple ports for the text."""
+    (myText, myType, myXY) = theSortedPorts[thePortIndex]
+    for nextPort_it in range(thePortIndex + 1, len(theSortedPorts)):  # Check for duplicate ports
+        (myNextText, myNextType, myNextXY) = theSortedPorts[nextPort_it]
+        if myNextText != myText: break  # different text
+        if (myNextText, myNextXY) in thePrintedPorts: continue  # Already printed (same port)
+        if myNextXY == "": continue  # dummy port
+        if myText == myNextText:  # Coil text must be unique (look ahead)
+            return True
+    return False
+
+def GetSlicePort(theInstance, theXyList, theType, theText, thePortData):
+    """Returns port name of slice if found."""
+    for xy_it in theXyList:
+        myKey = (theInstance, xy_it, theType, theText)
+        if myKey in thePortData:
+            return thePortData[myKey]
+    return False   
+
+def CheckPortData(thePortData, theInstanceOrder, theInstances, theTolerance,
+                  theOutputFile, theNetConnections):
+    """Check the promoted ports' alignment and winding."""
+    (mySortedPorts, myBlankPorts) = CreatePortLists(thePortData, theTolerance)
     myOutput = "Check,Port,Type,X,Y"
-    mySortedInstances = sorted(theInstances)
+    mySortedInstances = []
+    for instance_it in theInstanceOrder:
+        mySortedInstances.append(instance_it.find('instanceName').text)
     for key_it in mySortedInstances:
         myOutput += "," + key_it + "(" + theInstances[key_it]['master'] + ")"
     theOutputFile.write(myOutput + "\n")
-    myUsedNets = set()
-    for port_it in sorted(myFinalPorts, key=CreateSortKey):
-        (myText, myType, myXY) = port_it
-        if myXY == "": continue  # skip netlist only port keys (no XY)
-        myUsedNets.add(myText)
+    myPrintedPorts = set()
+    myUsedCoils = set()
+    myLastText = ""
+    for port_it in range(len(mySortedPorts)):
+        (myText, myType, myXY) = mySortedPorts[port_it]
         myPortOk = "O"
-        (myX, myY) = literal_eval(myXY)
-        myOutput = myText + "," + myType + "," + "{:.12g}, {:.12g}".format(myX, myY)
+        if (myText, myXY) in myPrintedPorts: continue
+        if myXY == "":
+            if myText == myLastText or myText not in theNetConnections: continue
+            # CDL net without layout port
+            myPortOk = "X"
+            myOutput = myText + ",,"
+            myXyList = [""]
+        else:
+            (myX, myY) = literal_eval(myXY)
+            myXyList = CreateXyList(port_it, mySortedPorts, theTolerance)
+            for xy_it in myXyList:
+                myPrintedPorts.add((myText, xy_it))
+            myOutput = myText + "," + myType + "," + "{:.12g}, {:.12g}".format(myX, myY)
         myConnectionCount = 0
         for instance_it in mySortedInstances:
-            myKey = (instance_it, myXY, myType, myText)
-            if myKey in thePortData:
-                myOutput += "," + thePortData[myKey]
+            mySlicePort = GetSlicePort(instance_it, myXyList, myType, myText, thePortData)
+            if mySlicePort:
+                (mySliceText, myWinding) = mySlicePort
+                if myType.startswith("COIL"):
+                    mySliceText += "@" + myWinding
+                    if myConnectionCount == 0:
+                        myPortWinding = myWinding
+                    elif myPortWinding != myWinding:
+                        myPortOk = "X"
+                myOutput += "," + mySliceText
                 myConnectionCount += 1
             else:  # No port on this chip
                 if myType.startswith("COIL"):  # Coils do not need ports on every chip
                     myOutput += ", "
-                elif myType == "TSV":
-                    myBlankKey = (instance_it, myXY, myType, "")
-                    if myBlankKey in thePortData:  # TSV must have port or blank on every chip
-                        myOutput += ", "
+                elif myType == "TSV":  # TSV must have port or blank on every chip
+                    if HasBlankPort(instance_it, myType, myXY, theTolerance,
+                                    myBlankPorts, thePortData):
+                        myOutput += ", "                   
                     else:  # no matching port for this instance
                         myOutput += ",?"
                         myPortOk = "X"
+                else:  # dummy port
+                    myOutput += ", "
         if myConnectionCount < 2:  # All ports must have 2 or more connections
             myPortOk = "X"
         if myType.startswith("COIL"):  # Coil text must be unique
-            if myText in myUsedCoils:
+            if myText in myUsedCoils or MultiplePorts(port_it, mySortedPorts, myPrintedPorts):
                 myPortOk = "X"
-            else:
-                myUsedCoils.add(myText)
+            myUsedCoils.add(myText)
+        myLastText = myText
         theOutputFile.write(myPortOk + "," + myOutput + "\n")
-    for net_it in sorted(theNetConnections):
-        if net_it not in myUsedNets:
-            myOutput = "X," + net_it + ",,,"
-            for instance_it in mySortedInstances:
-                myKey = (instance_it, "", "", net_it)
-                if myKey in thePortData:
-                    myOutput += "," + thePortData[myKey]
-                else:
-                    myOutput += ", "
-            theOutputFile.write(myOutput + "\n")
-            print("ERROR: net " + net_it + " connects 2 or more chips, but is missing in layout")
 
 def main(argv):
     """Check the correspondence of stacked GDSII chip text
@@ -588,11 +710,12 @@ def main(argv):
     if not (1 <= len(argv) <= 2):
         print("usage: stic.py sticXmlFile [outputFile]")
         return
-    print("STIC: Stacked Terminal Interconnect Check version 1.00.00")
+    print("STIC: Stacked Terminal Interconnect Check version 1.02.00")
     print("Reading settings...")
     myStackedChip = ET.parse(argv[0]).getroot()  # Parse the xml file.
     PrintParameters(myStackedChip)
     myUserUnits = myStackedChip.find('userUnits').text
+    myTolerance = float(myStackedChip.find('tolerance').text)
     (myInstances, myNetConnections) = ReadTopCdlFile(myStackedChip)
     myPortData = {}
     for chip_it in myStackedChip.findall('chip'):
@@ -602,7 +725,8 @@ def main(argv):
         myOutputFile = open(argv[1], "w")
     else:
         myOutputFile = sys.stdout
-    CheckPortData(myPortData, myInstances, myOutputFile, myNetConnections)
+    CheckPortData(myPortData, myStackedChip.findall('chip'), myInstances,
+                  myTolerance, myOutputFile, myNetConnections)
 
 if __name__ == '__main__':
     main(sys.argv[1:])

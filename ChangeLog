@@ -1,0 +1,5 @@
+v1.02.00
+Check coil winding direction. 'R'-clockwise, 'L'-counter-clockwise
+Allow port offset tolerance in user units.
+Display error message for ports not in netlist.
+Fixed coil port count check. 
