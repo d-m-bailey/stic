@@ -83,7 +83,17 @@
           </xs:restriction>
         </xs:simpleType>
       </xs:element>
-      <xs:element name="cdlFileName">
+      <xs:element name="subcktName" minOccurs="0">
+        <xs:annotation>
+          <xs:documentation>The name of the subcircuit in CDL file. (required only if different from subcircuit in top level CDL netlist)</xs:documentation>
+        </xs:annotation>
+        <xs:simpleType>
+          <xs:restriction base="xs:string">
+            <xs:pattern value="[\S]*" />
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:element>
+      <xs:element name="cdlFileName" minOccurs="0">
         <xs:annotation>
           <xs:documentation>The CDL file with the chip definition (if excluded, use the top level netlist).</xs:documentation>
         </xs:annotation>
@@ -93,7 +103,7 @@
           </xs:restriction>
         </xs:simpleType>
       </xs:element>
-      <xs:element name="topLayoutName">
+      <xs:element name="layoutName">
         <xs:annotation>
           <xs:documentation>The name of the chip in GDS file.</xs:documentation>
         </xs:annotation>
@@ -138,11 +148,6 @@
       <xs:element name="port" type="portType" maxOccurs="unbounded">
         <xs:annotation>
           <xs:documentation>Definition of one port type. (eg. TSV, COIL)</xs:documentation>
-        </xs:annotation>
-      </xs:element>
-      <xs:element name="portText" type="portTextType" maxOccurs="unbounded">
-        <xs:annotation>
-          <xs:documentation>Definition of one port text layer.</xs:documentation>
         </xs:annotation>
       </xs:element>
     </xs:sequence>
@@ -216,6 +221,11 @@
             <xs:maxInclusive value="255"></xs:maxInclusive>
           </xs:restriction>
         </xs:simpleType>
+      </xs:element>
+      <xs:element name="portText" type="portTextType" minOccurs="0">
+        <xs:annotation>
+          <xs:documentation>Definition of port text layer.</xs:documentation>
+        </xs:annotation>
       </xs:element>
       <xs:element name="portCell" maxOccurs="unbounded">
         <xs:annotation>

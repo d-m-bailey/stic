@@ -1,7 +1,7 @@
 #! /usr/bin/env python
 """ stic.py: Check the port correspondence of a stack of GDSII chips.
 
-    Copyright 2106 D. Mitch Bailey
+    Copyright 2106, 2017 D. Mitch Bailey
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -57,7 +57,6 @@ def GetOrientation(theElement):
     Doesn't handle magnification.
     """
     if theElement.strans and (theElement.strans & int('1000000000000000', 2)):
-
         if not theElement.angle: return "MX"
         if theElement.angle == 90: return "MXR90"
         if theElement.angle == 180: return "MY"
@@ -126,20 +125,17 @@ def NormalizeBox(theBox):
     return [(min(theBox[0][0], theBox[1][0]), min(theBox[0][1], theBox[1][1])),
             (max(theBox[0][0], theBox[1][0]), max(theBox[0][1], theBox[1][1]))]
 
-def IsBox(theBox):
-    """True if points form a valid box."""
-    if len(theBox) != 5: return False  # Must have 5 points.
-    if theBox[0] != theBox[4]: return False  # Must start and stop at same point.
-    myCheckX = True if theBox[0][1] != theBox[1][1] else False
-    for point_it in range(4):
-        if myCheckX:
-            if theBox[point_it][0] != theBox[point_it+1][0]: return False
-            if theBox[point_it][1] == theBox[point_it+1][1]: return False
-        else:
-            if theBox[point_it][0] == theBox[point_it+1][0]: return False
-            if theBox[point_it][1] != theBox[point_it+1][1]: return False
-        myCheckX = not myCheckX
-    return True
+def GetLayerType(thePort):
+    """Return "layerNumber-dataType". """
+    return thePort.find('layerNumber').text + "-" + thePort.find('dataType').text
+
+def GetTextType(thePort):
+    """Return "textLayerNumber-textType". """
+    myPortText = thePort.find('portText')
+    if myPortText is not None:
+        return myPortText.find('layerNumber').text + "-" + myPortText.find('textType').text
+    else:
+        return "no text"
 
 def PrintParameters(theStackedChip):
     """Print XML parameters."""
@@ -152,22 +148,22 @@ def PrintParameters(theStackedChip):
         chipCount += 1
         print("\nChip " + str(chipCount) + ":")
         print(" CDL instance: " + chip_it.find('instanceName').text)
-        print(" CDL file: " + chip_it.find('cdlFileName').text)
+        if chip_it.find('subcktName') is not None:
+            mySubcktName = chip_it.find('subcktName').text
+        else:
+            mySubcktName = "look up in CDL"
+        print(" CDL file: " + chip_it.find('cdlFileName').text
+              + ", top block: " + mySubcktName)
         print(" GDS file: " + chip_it.find('gdsFileName').text
-              + ", top block: " + chip_it.find('topLayoutName').text)
+              + ", top block: " + chip_it.find('layoutName').text)
         print(" Orientation: " + chip_it.find('orientation').text
               + "; Offset: (" + chip_it.find('offset').find('x').text
               + ", " + chip_it.find('offset').find('y').text + ")"
               + "; Shrink: " + chip_it.find('shrink').text)
-        myPortText = " Port text:"
-        for portText_it in chip_it.findall('portText'):
-            myPortText += (" " + portText_it.find('layerNumber').text
-                           + ":" + portText_it.find('textType').text)
-        print(myPortText)
         for port_it in chip_it.findall('port'):
-            myPort = " Port: " + port_it.find('type').text
-            myPort += " " + port_it.find('layerNumber').text + ":" + port_it.find('dataType').text
-            myPortPrefix = " ("
+            myPort = " Port: " + port_it.find('type').text + " " + GetLayerType(port_it)
+            myPort += "; Text: " + GetTextType(port_it)
+            myPortPrefix = "; ("
             for cell_it in port_it.findall('portCell'):
                 myPort += myPortPrefix + cell_it.text
                 myPortPrefix = ", "
@@ -271,10 +267,10 @@ def CreateStructureIndex(theGdsiiLib):
 def GetBox(thePointList):
     """"Return the bounding box of the point list."""
     myMinX = thePointList[0][0]
-    myMaxX = thePointList[0][0]
+    myMaxX = myMinX
     myMinY = thePointList[0][1]
-    myMaxY = thePointList[0][1]
-    for xy_it in thePointList:
+    myMaxY = myMinY
+    for xy_it in thePointList[1:]:
         if myMinX > xy_it[0]:
             myMinX = xy_it[0]
         elif myMaxX < xy_it[0]:
@@ -289,7 +285,8 @@ def PromoteCellPorts(thePortLayers, thePortCellList, thePortType, theStructureIn
                      theOrientation="R0", theTranslation=[(0,0)]):
     """Promote low level cell ports to top level.
 
-    return: [{'type': portType, 'xy': pointList[1], 'box': pointList[2], 'winding': R|L}, ...]
+    return: [{'type': portType, 'xy': pointList[1], 'box': pointList[2], 'winding': R|L,
+              'textLayer': layer-type}, ...]
     errors: portLayers not in portCells, non-rectangular ports, non-boundary type ports
     """
     if not theTopLayout in theStructureIndex:
@@ -327,8 +324,10 @@ def PromoteCellPorts(thePortLayers, thePortCellList, thePortType, theStructureIn
                               + theTopLayout + " ignored.")
                     else:
                         myBox = GetBox(element_it.xy)
-                        myStructure.ports.append({'type': thePortType[theTopLayout],
-                                                  'xy': [(0,0)], 'box': myBox, 'winding': 'R'})
+                        myStructure.ports.append(
+                            {'type': thePortType[theTopLayout]['type'],
+                             'xy': [(0,0)], 'box': myBox, 'winding': 'R',
+                             'textLayer': thePortType[theTopLayout]['textLayer']})
             elif hasattr(element_it, 'layer') and hasattr(element_it, 'data_type'):
                 myLayerType = str(element_it.layer) + "-" + str(element_it.data_type)
                 if myLayerType in thePortLayers:
@@ -341,25 +340,33 @@ def PromoteCellPorts(thePortLayers, thePortCellList, thePortType, theStructureIn
         for port_it in myStructure.ports:
             myPorts.append({'type': port_it['type'], 'xy': Transform(port_it['xy'], myTransform),
                             'box': NormalizeBox(Transform(port_it['box'], myTransform)),
-                            'winding': FlipPort(port_it['winding'], theOrientation)})
+                            'winding': FlipPort(port_it['winding'], theOrientation),
+                            'textLayer': port_it['textLayer']})
     return myPorts
         
 def LoadGdsPorts(theChip, theStructureIndex, theTopLayout):
     """Return a list of ports from GDS library.
 
-    return: [{'type': portType, 'xy': pointList[1], 'box': pointList[2]}, ...]
+    return: [{'type': portType, 'xy': pointList[1], 'box': pointList[2],
+              'textLayer': layer-type}, ...]
     """
     myPortLayers = set()
-    myPortCellList = {}
-    myPortType = {}
+    myPortCellList = {}  # {layer-type: [cell1, cell2, ...], ...}
+    myPortType = {}  # {cell1: {'type': type, 'textLayer': layer-type}, ...}
     for port_it in theChip.findall('port'):
-        myLayerType = port_it.find('layerNumber').text + "-" + port_it.find('dataType').text
+        myLayerType = GetLayerType(port_it)
         if myLayerType not in myPortLayers:
             myPortLayers.add(myLayerType)
             myPortCellList[myLayerType] = []
         for portCell_it in port_it.findall('portCell'):
             myPortCellList[myLayerType].append(portCell_it.text)
-            myPortType[portCell_it.text] = port_it.find('type').text
+            if portCell_it.text in myPortType:
+                print("ERROR: cell " + portCell_it.text + " is defined as both "
+                      + myPortType[portCell_it.text] + " and " + port_it.find('type').text)
+            else:
+                myPortText = GetTextType(port_it)
+                myPortType[portCell_it.text] = {'type': port_it.find('type').text,
+                                                'textLayer': getTextType(port_it)}
     myPortList = PromoteCellPorts(myPortLayers, myPortCellList, myPortType, 
                                   theStructureIndex, theTopLayout)
     return myPortList 
@@ -367,18 +374,21 @@ def LoadGdsPorts(theChip, theStructureIndex, theTopLayout):
 def LoadGdsText(theChip, theTopStructure):
     """Return a list of text on the top structure.
 
-    return: [{'text': port, 'xy': pointList[1]}, ...]
+    return: [{'text': port, 'layer': "layer-type", 'xy': pointList[1]}, ...]
     """
     myTextLayers = []
-    for portText_it in theChip.findall('portText'):
-        myLayerType = portText_it.find('layerNumber').text + "-" + portText_it.find('textType').text
-        myTextLayers.append(myLayerType)
+    for port_it in theChip.findall('port'):
+        myPortText = GetTextType(port_it)
+        if myPortText != "no text":
+            myTextLayers.append(myPortText)
     myTextList = []
     for element_it in theTopStructure:
         if element_it.__class__.__name__ == 'Text':
             myLayerType = str(element_it.layer) + "-" + str(element_it.text_type)
             if myLayerType in myTextLayers:
-                myTextList.append({'text': element_it.string.decode('utf-8'), 'xy': element_it.xy})
+                myTextList.append({'text': element_it.string.decode('utf-8'),
+                                   'layer': myLayerType,
+                                   'xy': element_it.xy})
     return myTextList
 
 def UserScale(thePoint, theScale):
@@ -405,7 +415,13 @@ def AssignPorts(thePortList, theTextList, theTopLayout, theDbuPerUU):
                           + " at " + UserScale(myXY, theDbuPerUU) + " and "
                           + UserScale(text_it['xy'], theDbuPerUU) + " in " + theTopLayout)
                     myUnmapCount += 1
-                else:
+                elif text_it['layer'] != port_it['textLayer']:
+                    print("Warning: " + text_it['text']
+                          + " at " + UserScale(port_it['xy'], theDbuPerUU)
+                          + " on layer " + text_it['layer'] + " does not match expected " 
+                          + port_it['textLayer'] + " for port " + port_it['type'])
+                    myUnmapCount += 1
+                else:                    
                     myNamedPortList.append({'text': text_it['text'],
                                             'type': port_it['type'],
                                             'xy': port_it['xy'],
@@ -417,12 +433,17 @@ def AssignPorts(thePortList, theTextList, theTopLayout, theDbuPerUU):
             myUnmapCount += 1
     myBlankPortCount = 0
     for port_it in thePortList:
-        if not 'assigned' in port_it:  # Blank ports.
-            myNamedPortList.append({'text': "",
-                                    'type': port_it['type'],
-                                    'xy': port_it['xy'],
-                                    'winding': port_it['winding']})
-            myBlankPortCount += 1
+        if not 'assigned' in port_it:  # Check blank ports.
+            if port_it['textLayer'] == "no text":
+                myNamedPortList.append({'text': "",
+                                        'type': port_it['type'],
+                                        'xy': port_it['xy'],
+                                        'winding': port_it['winding']})
+            else:
+                print("Warning: Port type " + port_it['type']
+                      + " at " + UserScale(port_it['xy'], theDbuPerUU)
+                      + " is missing text")
+                myBlankPortCount += 1
     print(str(myUnmapCount) + " text ignored. " + str(myBlankPortCount) + " ports without text.")
     return myNamedPortList
 
@@ -446,7 +467,7 @@ def GetGdsPortData(theChip, theUserUnits):
     return: {(instanceName, x, y, portType, topNet): portName, ...}
     Note: x, y in user units.
     """
-    myTopLayoutName = theChip.find('topLayoutName').text
+    myLayoutName = theChip.find('layoutName').text
     myGdsFileName = theChip.find('gdsFileName').text
     myOrientation = theChip.find('orientation').text
     myShrink = float(theChip.find('shrink').text)
@@ -465,10 +486,10 @@ def GetGdsPortData(theChip, theUserUnits):
         raise ValueError
     myStructureIndex = CreateStructureIndex(myGdsiiLib)
     print("Loading ports...")
-    myPortList = LoadGdsPorts(theChip, myStructureIndex, myTopLayoutName)
-    myTextList = LoadGdsText(theChip, myStructureIndex[myTopLayoutName])
+    myPortList = LoadGdsPorts(theChip, myStructureIndex, myLayoutName)
+    myTextList = LoadGdsText(theChip, myStructureIndex[myLayoutName])
     print("Assigning text...")
-    myNamedPortList = AssignPorts(myPortList, myTextList, myTopLayoutName, myInternalDbuPerUU)
+    myNamedPortList = AssignPorts(myPortList, myTextList, myLayoutName, myInternalDbuPerUU)
     return TranslateChipPorts(myNamedPortList, myOrientation, [(myX, myY)],
                               myOutputDbuPerUU / myShrink)
 
@@ -479,7 +500,10 @@ def PromoteChipPorts(theChip, theInstances, theUserUnits):
     """
     myInstanceName = theChip.find('instanceName').text
     myCdlFile = theChip.find('cdlFileName').text
-    myMasterSubckt = theInstances[myInstanceName]['master']
+    if theChip.find('subcktName'):
+        myMasterSubckt = theChip.find('subcktName').text
+    else:
+        myMasterSubckt = theInstances[myInstanceName]['master']
     myCdlPortMap = MapCdlPorts(myMasterSubckt, myCdlFile, theInstances[myInstanceName]['nets'])
     myGdsPortData = GetGdsPortData(theChip, theUserUnits)
     myMappedPorts = {}
@@ -494,7 +518,7 @@ def PromoteChipPorts(theChip, theInstances, theUserUnits):
                 myMappedPorts[myKey] = (port_it['text'], port_it['winding'])
             else:
                 print("ERROR: layout port " + port_it['text']
-                      + " at " + port_it['xy'] + " of " + theChip.find('topLayoutName').text
+                      + " at " + port_it['xy'] + " of " + theChip.find('layoutName').text
                       + " in " + theChip.find('gdsFileName').text
                       + " not in subckt " + myMasterSubckt + " of " + myCdlFile) 
         else:  # unlabeled port

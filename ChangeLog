@@ -3,3 +3,14 @@ Check coil winding direction. 'R'-clockwise, 'L'-counter-clockwise
 Allow port offset tolerance in user units.
 Display error message for ports not in netlist.
 Fixed coil port count check. 
+
+v1.03.00
+Moved port text definition from chip to port
+Ports may be defined without text
+Port text must match unique port type
+Can define subckt name to override top level CDL subckt name
+Changed xml element names topLayoutName -> layoutName
+Removed unused IsBox function
+Changed and standardized layer type display layer:type -> layer-type
+Standardized display puncuation
+Removed redundant first bounding box coordinate check
