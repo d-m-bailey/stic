@@ -3,7 +3,9 @@
 Stacked-chip Terminal Connectivity Check
 
 Checks the terminal positions on a set of stacked chips for alignment.
-TSV ports must exist on every chip (blank ports allowed)
+
+TSV ports must exist on every chip (blank ports allowed).
+
 COIL ports must have the same winding direction.
 
 Input is an xml file defining
@@ -25,6 +27,7 @@ Input is an xml file defining
     - top port text (optional)
       - text layer
       - texttype number
+      
 Output is a CSV file listing each port, xy, port type, chip connection(winding) and check result.
     
 stic.xsd is the schema for the xml file
