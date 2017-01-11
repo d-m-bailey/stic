@@ -1,6 +1,6 @@
 # stic
 
-Staced-chip Terminal Connectivity Check
+Stacked-chip Terminal Connectivity Check
 
 Checks the terminal positions on a set of stacked chips for alignment.
 
