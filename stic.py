@@ -366,7 +366,7 @@ def LoadGdsPorts(theChip, theStructureIndex, theTopLayout):
             else:
                 myPortText = GetTextType(port_it)
                 myPortType[portCell_it.text] = {'type': port_it.find('type').text,
-                                                'textLayer': getTextType(port_it)}
+                                                'textLayer': GetTextType(port_it)}
     myPortList = PromoteCellPorts(myPortLayers, myPortCellList, myPortType, 
                                   theStructureIndex, theTopLayout)
     return myPortList 
