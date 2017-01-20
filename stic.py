@@ -501,10 +501,10 @@ def PromoteChipPorts(theChip, theInstances, theUserUnits):
     """
     myInstanceName = theChip.find('instanceName').text
     myCdlFile = theChip.find('cdlFileName').text
-    if theChip.find('subcktName'):
-        myMasterSubckt = theChip.find('subcktName').text
-    else:
+    if theChip.find('subcktName') is None:
         myMasterSubckt = theInstances[myInstanceName]['master']
+    else:
+        myMasterSubckt = theChip.find('subcktName').text
     myCdlPortMap = MapCdlPorts(myMasterSubckt, myCdlFile, theInstances[myInstanceName]['nets'])
     myGdsPortData = GetGdsPortData(theChip, theUserUnits)
     myMappedPorts = {}  # {(instanceName, "(x, y)", portType, topNet): (portName, winding), ...}
