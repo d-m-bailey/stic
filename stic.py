@@ -110,7 +110,7 @@ def Transform(thePointList, theTransform):
 
     return: [(x,y), ...]
     """
-    myResult = []
+    myResult = []  # [(x,y), ...]
     for point_it in thePointList:
         myPoint = [point_it[0], point_it[1], 1]
         myProduct = np.dot(myPoint, theTransform)
@@ -182,7 +182,7 @@ def ReadTopCdlFile(theStackedChip):
     myCdlFile = OpenFile(myTopCdlFile)
     mySaveInstances = False
     myLine = ""
-    myInstances = {}
+    myInstances = {}  # {instanceName: {'master': masterName, 'nets': portList}, ...}
     myUsedNets = set()
     myNetConnections = set()
     for line_it in myCdlFile:
@@ -234,7 +234,7 @@ def MapCdlPorts(theTopCell, theCdlFile, theParentNetList):
     myCdlFile = OpenFile(theCdlFile)
     mySaveInstances = False
     myLine = ""
-    myNetMap = {}
+    myNetMap = {}  # {portName: topNet, ...}
     for line_it in myCdlFile:
         if line_it.startswith("*"): continue  #ignore comments
         if not line_it.strip(): continue  #ignore blank lines
@@ -258,7 +258,7 @@ def CreateStructureIndex(theGdsiiLib):
 
     return: {structureName: structureObject, ...}
     """
-    myStructureIndex = {}
+    myStructureIndex = {}  # {structureName: structureObject, ...}
     for structure_it in theGdsiiLib:
         structure_it.processed = False
         myStructureIndex[structure_it.name.decode('utf-8')] = structure_it
@@ -352,7 +352,7 @@ def LoadGdsPorts(theChip, theStructureIndex, theTopLayout):
     """
     myPortLayers = set()
     myPortCellList = {}  # {layer-type: [cell1, cell2, ...], ...}
-    myPortType = {}  # {cell1: {'type': type, 'textLayer': layer-type}, ...}
+    myPortType = {}  # {cell: {'type': type, 'textLayer': layer-type}, ...}
     for port_it in theChip.findall('port'):
         myLayerType = GetLayerType(port_it)
         if myLayerType not in myPortLayers:
@@ -374,14 +374,14 @@ def LoadGdsPorts(theChip, theStructureIndex, theTopLayout):
 def LoadGdsText(theChip, theTopStructure):
     """Return a list of text on the top structure.
 
-    return: [{'text': port, 'layer': "layer-type", 'xy': pointList[1]}, ...]
+    return: [{'text': port, 'layer': layer-type, 'xy': point}, ...]
     """
-    myTextLayers = []
+    myTextLayers = []  # [layer-type, ...]
     for port_it in theChip.findall('port'):
         myPortText = GetTextType(port_it)
         if myPortText != "no text":
             myTextLayers.append(myPortText)
-    myTextList = []
+    myTextList = []  # [{'text': text, 'layer': layer-type, 'xy': [(x, y)]}, ...]
     for element_it in theTopStructure:
         if element_it.__class__.__name__ == 'Text':
             myLayerType = str(element_it.layer) + "-" + str(element_it.text_type)
@@ -403,7 +403,7 @@ def AssignPorts(thePortList, theTextList, theTopLayout, theDbuPerUU):
     return: [{'text': port, 'type': portType, 'xy': portCenter, 'winding': R|L}, ...]
     errors: text mapped to multiple ports, text not mapped to any port.
     """
-    myNamedPortList = []
+    myNamedPortList = []  # [{'text': port, 'type': portType, 'xy': [(x, y)], 'winding': R|L}, ...]
     myUnmapCount = 0
     print("Mapping " + str(len(theTextList)) + " texts to " + str(len(thePortList)) + " ports")
     for text_it in theTextList:
@@ -452,6 +452,7 @@ def TranslateChipPorts(thePortList, theOrientation, theTranslation, theScale):
     return: [{'text': portName, 'type': portType, 'xy': position, 'winding': L|R}, ...]
     """
     myInstancePortList = []
+    # [{'text': port, 'type': portType, 'xy': "(x, y)", 'winding': R|L}, ...]
     myTransform = GetTransform(theOrientation, theTranslation)
     for port_it in thePortList:
         myInstancePortList.append({'text': port_it['text'],
@@ -464,7 +465,7 @@ def TranslateChipPorts(thePortList, theOrientation, theTranslation, theScale):
 def GetGdsPortData(theChip, theUserUnits):
     """Translate GDS port data to final positions.
 
-    return: {(instanceName, x, y, portType, topNet): portName, ...}
+    return: [{'text': port, 'type': portType, 'xy': "(x, y)", 'winding': R|L}, ...]
     Note: x, y in user units.
     """
     myLayoutName = theChip.find('layoutName').text
@@ -496,7 +497,7 @@ def GetGdsPortData(theChip, theUserUnits):
 def PromoteChipPorts(theChip, theInstances, theUserUnits):
     """Promote individual chip ports to virtual top level.
 
-    return: {(instanceName, x, y, portType, topNet): portName, ...}
+    return: {(instanceName, "(x, y)", portType, topNet): (portName, winding), ...}
     """
     myInstanceName = theChip.find('instanceName').text
     myCdlFile = theChip.find('cdlFileName').text
@@ -506,7 +507,7 @@ def PromoteChipPorts(theChip, theInstances, theUserUnits):
         myMasterSubckt = theInstances[myInstanceName]['master']
     myCdlPortMap = MapCdlPorts(myMasterSubckt, myCdlFile, theInstances[myInstanceName]['nets'])
     myGdsPortData = GetGdsPortData(theChip, theUserUnits)
-    myMappedPorts = {}
+    myMappedPorts = {}  # {(instanceName, "(x, y)", portType, topNet): (portName, winding), ...}
     for net_it in myCdlPortMap:  # Added entry to handle connected CDL nets without ports
         myKey = (myInstanceName, "", "", myCdlPortMap[net_it])
         myMappedPorts[myKey] = net_it
@@ -566,13 +567,13 @@ def CreateSortKey(theValue):
 def CreateSearchList(theXY, theTolerance):
     """Return a list of coordinates for 2x2 array of points rounded to tolerance.
 
-    return ["(x, y)", "(x, y+t)", "(x+t, y)", "(x+t, y+t)", ...]
+    return ["(x, y)", "(x, y+t)", "(x+t, y)", "(x+t, y+t)"] or ["(x, y)"]
     """
     if theTolerance > 0.000001:  # ignore tolerance less than 1e-6 user units
         (myX, myY) = literal_eval(theXY)
         myRoundedX = round(myX / theTolerance) * theTolerance
         myRoundedY = round(myY / theTolerance) * theTolerance
-        myKeyList = []
+        myKeyList = []  # ["(x, y)", ...]
         for x_offset in range(0, 2):
             for y_offset in range(0, 2):
                 myKeyList.append(
@@ -605,10 +606,10 @@ def CreatePortLists(thePortData, theTolerance):
 
     Returns: (set((text, type, xy), ...), {(type, roundedXY): set(xy, ...)})
     """
-    myFinalPorts = set()
-    myBlankPorts = {}
-    for key_it in thePortData:  # Create top level port list.
-        (myInstance, myXY, myType, myText) = key_it
+    myFinalPorts = set()  # ((text, type, "(x, y)"), ...)
+    myBlankPorts = {}  # {(type, "(x, y)"): set("(x, y)", ...), ...}
+    for portKey_it in thePortData:  # Create top level port list.
+        (myInstance, myXY, myType, myText) = portKey_it
         if myText == "":
             myKeyList = CreateSearchList(myXY, theTolerance)
             for key_it in myKeyList:
@@ -655,24 +656,24 @@ def MultiplePorts(thePortIndex, theSortedPorts, thePrintedPorts):
     return False
 
 def GetSlicePort(theInstance, theXyList, theType, theText, thePortData):
-    """Returns port name of slice if found."""
+    """Returns (portName, winding) of slice if found."""
     for xy_it in theXyList:
         myKey = (theInstance, xy_it, theType, theText)
         if myKey in thePortData:
             return thePortData[myKey]
     return False   
 
+def PrintReportHeader(theOutputFile, theSortedInstances):
+    """Print report file heading."""
+    myOutput = "Check,Port,Type,X,Y"
+    for key_it in theSortedInstances:
+        myOutput += "," + key_it + "(" + theInstances[key_it]['master'] + ")"
+    theOutputFile.write(myOutput + "\n")
+    
 def CheckPortData(thePortData, theInstanceOrder, theInstances, theTolerance,
                   theOutputFile, theNetConnections):
     """Check the promoted ports' alignment and winding."""
     (mySortedPorts, myBlankPorts) = CreatePortLists(thePortData, theTolerance)
-    myOutput = "Check,Port,Type,X,Y"
-    mySortedInstances = []
-    for instance_it in theInstanceOrder:
-        mySortedInstances.append(instance_it.find('instanceName').text)
-    for key_it in mySortedInstances:
-        myOutput += "," + key_it + "(" + theInstances[key_it]['master'] + ")"
-    theOutputFile.write(myOutput + "\n")
     myPrintedPorts = set()
     myUsedCoils = set()
     myLastText = ""
@@ -693,7 +694,7 @@ def CheckPortData(thePortData, theInstanceOrder, theInstances, theTolerance,
                 myPrintedPorts.add((myText, xy_it))
             myOutput = myText + "," + myType + "," + "{:.12g}, {:.12g}".format(myX, myY)
         myConnectionCount = 0
-        for instance_it in mySortedInstances:
+        for instance_it in theInstanceOrder:
             mySlicePort = GetSlicePort(instance_it, myXyList, myType, myText, thePortData)
             if mySlicePort:
                 (mySliceText, myWinding) = mySlicePort
@@ -708,7 +709,7 @@ def CheckPortData(thePortData, theInstanceOrder, theInstances, theTolerance,
             else:  # No port on this chip
                 if myType.startswith("COIL"):  # Coils do not need ports on every chip
                     myOutput += ", "
-                elif myType == "TSV":  # TSV must have port or blank on every chip
+                elif myType.startswith("TSV"):  # TSV must have port or blank on every chip
                     if HasBlankPort(instance_it, myType, myXY, theTolerance,
                                     myBlankPorts, thePortData):
                         myOutput += ", "                   
@@ -716,6 +717,7 @@ def CheckPortData(thePortData, theInstanceOrder, theInstances, theTolerance,
                         myOutput += ",?"
                         myPortOk = "X"
                 else:  # dummy port
+                    # test for use!
                     myOutput += ", "
         if myConnectionCount < 2:  # All ports must have 2 or more connections
             myPortOk = "X"
@@ -729,19 +731,19 @@ def CheckPortData(thePortData, theInstanceOrder, theInstances, theTolerance,
 def main(argv):
     """Check the correspondence of stacked GDSII chip text
 
-    usage: stic.py sticXmlFile
+    usage: stic.py sticXmlFile [outputFile]
     """
     if not (1 <= len(argv) <= 2):
         print("usage: stic.py sticXmlFile [outputFile]")
         return
-    print("STIC: Stacked Terminal Interconnect Check version 1.02.00")
+    print("STIC: Stacked Terminal Interconnect Check version 1.03.00")
     print("Reading settings...")
     myStackedChip = ET.parse(argv[0]).getroot()  # Parse the xml file.
     PrintParameters(myStackedChip)
     myUserUnits = myStackedChip.find('userUnits').text
     myTolerance = float(myStackedChip.find('tolerance').text)
     (myInstances, myNetConnections) = ReadTopCdlFile(myStackedChip)
-    myPortData = {}
+    myPortData = {}  # {(instanceName, "(x, y)", portType, topNet): (portName, winding), ...}
     for chip_it in myStackedChip.findall('chip'):
         myPortData.update(PromoteChipPorts(chip_it, myInstances, myUserUnits))
     if len(argv) == 2:
@@ -749,6 +751,14 @@ def main(argv):
         myOutputFile = open(argv[1], "w")
     else:
         myOutputFile = sys.stdout
+    mySortedInstances = []  # [instanceName, ...]
+    for instance_it in myStackedChip.findall('chip'):
+        mySortedInstances.append(instance_it.find('instanceName').text)
+    PrintReportHeader(myOutputFile, mySortedInstances)
+    for key_it in mySortedInstances:
+        myOutput += "," + key_it + "(" + theInstances[key_it]['master'] + ")"
+    theOutputFile.write(myOutput + "\n")
+
     CheckPortData(myPortData, myStackedChip.findall('chip'), myInstances,
                   myTolerance, myOutputFile, myNetConnections)
 
