@@ -663,7 +663,7 @@ def GetSlicePort(theInstance, theXyList, theType, theText, thePortData):
             return thePortData[myKey]
     return False   
 
-def PrintReportHeader(theOutputFile, theSortedInstances):
+def PrintReportHeader(theOutputFile, theSortedInstances, theInstances):
     """Print report file heading."""
     myOutput = "Check,Port,Type,X,Y"
     for key_it in theSortedInstances:
@@ -736,7 +736,7 @@ def main(argv):
     if not (1 <= len(argv) <= 2):
         print("usage: stic.py sticXmlFile [outputFile]")
         return
-    print("STIC: Stacked Terminal Interconnect Check version 1.03.00")
+    print("STIC: Stacked Terminal Interconnect Check version 1.03.02")
     print("Reading settings...")
     myStackedChip = ET.parse(argv[0]).getroot()  # Parse the xml file.
     PrintParameters(myStackedChip)
@@ -754,12 +754,8 @@ def main(argv):
     mySortedInstances = []  # [instanceName, ...]
     for instance_it in myStackedChip.findall('chip'):
         mySortedInstances.append(instance_it.find('instanceName').text)
-    PrintReportHeader(myOutputFile, mySortedInstances)
-    for key_it in mySortedInstances:
-        myOutput += "," + key_it + "(" + theInstances[key_it]['master'] + ")"
-    theOutputFile.write(myOutput + "\n")
-
-    CheckPortData(myPortData, myStackedChip.findall('chip'), myInstances,
+    PrintReportHeader(myOutputFile, mySortedInstances, myInstances)
+    CheckPortData(myPortData, mySortedInstances, myInstances,
                   myTolerance, myOutputFile, myNetConnections)
 
 if __name__ == '__main__':
