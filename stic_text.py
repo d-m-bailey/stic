@@ -167,7 +167,7 @@ def PrintParameters(theStackedChip):
               + "; Shrink: " + chip_it.find('shrink').text)
         for port_it in chip_it.findall('portText'):
             (myPortText, myOutputText) = GetTextType(port_it)
-            print("Port text input: " + myPortText + "; output: " + myOutputText)
+            print(" Port text input: " + myPortText + "; output: " + myOutputText)
             
 def ReadTopCdlFile(theStackedChip):
     """Read a CDL netlist and return a list of top instances with nets.
@@ -392,7 +392,7 @@ def LoadGdsText(theChip, theTopStructure):
             myLayerType = str(element_it.layer) + " " + str(element_it.text_type)
             if myLayerType in myTextLayers:
                 myTextList.append({'text': element_it.string.decode('utf-8'),
-                                   'layer': myOutputLayerType[myLayerType],
+                                   'layer': myTextLayers[myLayerType],
                                    'xy': element_it.xy})
     return myTextList
 
@@ -400,7 +400,7 @@ def UserScale(thePoint, theScale):
     """Returns thePoint scaled to used coordinates"""
     myX = thePoint[0][0] / theScale
     myY = thePoint[0][1] / theScale
-    return("({0:.12g}, {1:.12g})".format(myX, myY))
+    return("{0:.12g} {1:.12g}".format(myX, myY))
 
 ##def AssignPorts(thePortList, theTextList, theTopLayout, theDbuPerUU):
 ##    """Return a list of text with port type centered at port origin.
@@ -466,7 +466,7 @@ def TranslateChipPorts(thePortList, theOrientation, theTranslation, theScale):
                                                    theScale)})
     return myInstancePortList
 
-def GetGdsPortData(theChip, theUserUnits):
+def GetGdsPortData(theChip):
     """Translate GDS port data to final positions.
 
     return: [{'text': port, 'xy': "(x, y)"}, ...]
@@ -492,6 +492,9 @@ def GetGdsPortData(theChip, theUserUnits):
     myStructureIndex = CreateStructureIndex(myGdsiiLib)
     print("Loading ports...")
 #    myPortList = LoadGdsPorts(theChip, myStructureIndex, myLayoutName)
+    if myLayoutName not in myStructureIndex:
+        print("ERROR: Could not find " + myLayoutName + " in " + myGdsFileName)
+        raise NameError
     myTextList = LoadGdsText(theChip, myStructureIndex[myLayoutName])
     print("Assigning text...")
 #    myNamedPortList = AssignPorts(myPortList, myTextList, myLayoutName, myInternalDbuPerUU)
@@ -507,7 +510,7 @@ def PrintChipPorts(theChip, theInstances, theNetConnections, theOutputFile):
     else:
         myMasterSubckt = theChip.find('subcktName').text
     myCdlPortMap = MapCdlPorts(myMasterSubckt, myCdlFile, theInstances[myInstanceName]['nets'])
-    myGdsPortData = GetGdsPortData(theChip, theUserUnits)
+    myGdsPortData = GetGdsPortData(theChip)
     myPrintedPorts = set()  # {localNet, ...}
 ##    for net_it in myCdlPortMap:  # Added entry to handle connected CDL nets without ports
 ##        myKey = (myInstanceName, "", myCdlPortMap[net_it])
@@ -516,12 +519,13 @@ def PrintChipPorts(theChip, theInstances, theNetConnections, theOutputFile):
         if port_it['text'] in myCdlPortMap:
 ##            myKey = (myInstanceName, port_it['xy'], myCdlPortMap[port_it['text']])
 ##            myMappedPorts[myKey] = port_it['text']
-            theOutputFile.write(" ".join("LAYOUT TEXT", myCdlPortMap[port_it['text']],
-                                         port_it['xy'], port_it['layer']))
+            theOutputFile.write(" ".join(("LAYOUT TEXT",
+                                          "\"" + myCdlPortMap[port_it['text']] + "\"",
+                                          port_it['xy'], port_it['layer'], "\n")))
             myPrintedPorts.add(port_it['text'])     
         else:
             print("ERROR: layout port " + port_it['text']
-                  + " at " + port_it['xy'] + " of " + theChip.find('layoutName').text
+                  + " at (" + port_it['xy'] + ") of " + theChip.find('layoutName').text
                   + " in " + theChip.find('gdsFileName').text
                   + " not in subckt " + myMasterSubckt + " of " + myCdlFile)
     for net_it in myCdlPortMap:  # Check for CDL nets missing ports

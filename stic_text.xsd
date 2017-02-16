@@ -63,7 +63,7 @@
           </xs:restriction>
         </xs:simpleType>
       </xs:element>
-      <xs:element name="cdlFileName" minOccurs="0">
+      <xs:element name="cdlFileName">
         <xs:annotation>
           <xs:documentation>The CDL file with the chip definition (if excluded, use the top level netlist).</xs:documentation>
         </xs:annotation>
