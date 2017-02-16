@@ -524,13 +524,14 @@ def PrintChipPorts(theChip, theInstances, theNetConnections, theOutputFile):
                                           port_it['xy'], port_it['layer'], "\n")))
             myPrintedPorts.add(port_it['text'])     
         else:
-            print("ERROR: layout port " + port_it['text']
+            print("WARNING: layout port " + port_it['text']
                   + " at (" + port_it['xy'] + ") of " + theChip.find('layoutName').text
                   + " in " + theChip.find('gdsFileName').text
-                  + " not in subckt " + myMasterSubckt + " of " + myCdlFile)
+                  + " not in subckt " + myInstanceName + "(" + myMasterSubckt + ") of " + myCdlFile)
     for net_it in myCdlPortMap:  # Check for CDL nets missing ports
         if net_it not in myPrintedPorts:
-            print("WARNING: port " + net_it + " of " + myInstance + " has no layout text")
+            print("WARNING: net " + net_it + " of " + myInstanceName + "(" + myMasterSubckt + ") of "
+                  + myCdlFile + " has no layout text")
 #    return myMappedPorts
 
 ##def CreateSortKey(theValue):
@@ -739,7 +740,7 @@ def main(argv):
     if not (1 <= len(argv) <= 2):
         print("usage: stic_text.py sticTextXmlFile [outputFile]")
         return
-    print("STIC: Stacked Terminal Interconnect Check Text version 0.05.00")
+    print("STIC: Stacked Terminal Interconnect Check Text version 0.09.00")
     print("Reading settings...")
     myStackedChip = ET.parse(argv[0]).getroot()  # Parse the xml file.
     PrintParameters(myStackedChip)
