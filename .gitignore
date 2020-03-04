@@ -12,3 +12,5 @@ stic.xsd.*
 *.xml
 XMLSchema.dtd
 XMLSchema.xsd
+layout.text
+stic_text.tgz
