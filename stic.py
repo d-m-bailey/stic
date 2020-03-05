@@ -1,7 +1,17 @@
 #! /usr/bin/env python
 """ stic.py: Check the port correspondence of a stack of GDSII chips.
 
-    Copyright 2106, 2017 D. Mitch Bailey
+    usage: stic.py sticXmlFile [outputFile]
+
+    Inputs:
+      sticXmlFile: XML file containing chip placement definitions. stic.xsd is the XML schema.
+      outputFile: optional file name for CSV output.
+    Output:
+      settings and errors are displayed on the standard output.
+      CSV file of the list of ports with respective positions on each chip and matching status.
+        If outputFile is not specified, displayed on the standard output.
+        
+    Copyright 2016-2020 D. Mitch Bailey
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -15,6 +25,8 @@
 
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+    You can download check_cvc from https://github.com/d-m-bailey/stic.git
 
     requires python-gdsii, numpy
     pip install http://pypi.python.org/packages/source/p/python-gdsii/python-gdsii-0.2.1.tar.gz
@@ -37,6 +49,17 @@ import numpy as np
 from operator import attrgetter
 from pprint import pprint
 from ast import literal_eval
+import json
+import errno
+
+def DisplayLicense():
+    """Display GPLv3 reference."""
+    print("stic: Stacked terminal interconnect Checker: v1.1.0")
+    print("Copyright (C) 2016-2020  D. Mitch Bailey")
+    print("This program comes with ABSOLUTELY NO WARRANTY.")
+    print("This is free software licensed under GPLv3,")
+    print("and you are welcome to redistribute it under certain conditions.")
+    print("See http://www.gnu.org/licenses/ for details.\n")
 
 def OpenFile(theFileName, theMode="rt"):
     """Open a file (possibly compressed gz) and return file"""
@@ -397,18 +420,34 @@ def UserScale(thePoint, theScale):
     myY = thePoint[0][1] / theScale
     return("({0:.12g}, {1:.12g})".format(myX, myY))
 
+def GetSize(theBox, theCenter, theTopLayout):
+    """Returns the width and length of theBox.
+
+    return: (width, height)
+    warnings: center of theBox is not theCenter.
+    """
+    myWidth = abs(theBox[0][0] - theBox[1][0])
+    myHeight = abs(theBox[0][1] - theBox[1][1])
+    if ( (theBox[0][0] + theBox[1][0]) / 2 != theCenter[0]
+         or (theBox[1][1] + theBox[1][1]) / 2 != theCenter[1] ):
+        print("Warning: port is not centered at", theCenter, "in", theTopLayout)
+    return(list(myWidth, myHeight))
+
 def AssignPorts(thePortList, theTextList, theTopLayout, theDbuPerUU):
     """Return a list of text with port type centered at port origin.
 
-    return: [{'text': port, 'type': portType, 'xy': portCenter, 'winding': R|L}, ...]
+    return: [{'text': port, 'type': portType, 'xy': portCenter,
+              'size': (width, height), 'winding': R|L}, ...]
     errors: text mapped to multiple ports, text not mapped to any port.
     """
-    myNamedPortList = []  # [{'text': port, 'type': portType, 'xy': [(x, y)], 'winding': R|L}, ...]
+    myNamedPortList = []  # [{'text': port, 'type': portType, 'xy': [(x, y)],
+                          #   'size': (width, length), 'winding': R|L}, ...]
     myUnmapCount = 0
     print("Mapping " + str(len(theTextList)) + " texts to " + str(len(thePortList)) + " ports")
     for text_it in theTextList:
         myTextFound = False
         for port_it in thePortList:
+            (myWidth, myHeight) = GetSize(port_it['box'], port_it['xy'], theTopLayout) 
             if BoxContains(port_it['box'], text_it['xy'][0]):
                 if myTextFound and myXY != port_it['xy']:
                     print("Warning: Text in multiple ports: " + text_it['text']
@@ -425,6 +464,9 @@ def AssignPorts(thePortList, theTextList, theTopLayout, theDbuPerUU):
                     myNamedPortList.append({'text': text_it['text'],
                                             'type': port_it['type'],
                                             'xy': port_it['xy'],
+                                            'size': GetSize(port_it['box'],
+                                                            port_it['xy'],
+                                                            theTopLayout),
                                             'winding': port_it['winding']})
                     port_it['assigned'] = True
                     myTextFound = True
@@ -438,6 +480,9 @@ def AssignPorts(thePortList, theTextList, theTopLayout, theDbuPerUU):
                 myNamedPortList.append({'text': "",
                                         'type': port_it['type'],
                                         'xy': port_it['xy'],
+                                        'size': GetSize(port_it['box'],
+                                                        port_it['xy'],
+                                                        theTopLayout),
                                         'winding': port_it['winding']})
             else:
                 print("Warning: Port type " + port_it['type']
@@ -449,23 +494,28 @@ def AssignPorts(thePortList, theTextList, theTopLayout, theDbuPerUU):
 
 def TranslateChipPorts(thePortList, theOrientation, theTranslation, theScale):
     """Return a list of ports and transformed to final position in user units.
-    return: [{'text': portName, 'type': portType, 'xy': position, 'winding': L|R}, ...]
+    return: [{'text': portName, 'type': portType, 'xy': position,
+              'size': (width, height), 'winding': L|R}, ...]
     """
-    myInstancePortList = []
-    # [{'text': port, 'type': portType, 'xy': "(x, y)", 'winding': R|L}, ...]
+    myInstancePortList = []  # [{'text': port, 'type': portType, 'xy': "(x, y)",
+                             #   'size': (width, height), 'winding': R|L}, ...]
     myTransform = GetTransform(theOrientation, theTranslation)
+    mySwitchSize = "R90" in theOrientation or "R270" in theOrientation
     for port_it in thePortList:
         myInstancePortList.append({'text': port_it['text'],
                                    'type': port_it['type'],
                                    'xy': UserScale(Transform(port_it['xy'], myTransform),
                                                    theScale),
+                                   'size': ( port_it['size'].reverse() if mySwitchSize
+                                             else port_it['size'] )
                                    'winding': FlipPort(port_it['winding'], theOrientation)})
     return myInstancePortList
 
 def GetGdsPortData(theChip, theUserUnits):
     """Translate GDS port data to final positions.
 
-    return: [{'text': port, 'type': portType, 'xy': "(x, y)", 'winding': R|L}, ...]
+    return: [{'text': port, 'type': portType, 'xy': "(x, y)",
+              'size': (width, height), 'winding': R|L}, ...]
     Note: x, y in user units.
     """
     myLayoutName = theChip.find('layoutName').text
@@ -494,6 +544,41 @@ def GetGdsPortData(theChip, theUserUnits):
     return TranslateChipPorts(myNamedPortList, myOrientation, [(myX, myY)],
                               myOutputDbuPerUU / myShrink)
 
+def LoadGdsPortData(theChip, theUserUnits, theInstance):
+    """Loads port data from file if specified and exists, or from GDS otherwise.
+
+    modifies:
+      theInstance['source']: "file" if port data from file, "GDS" if port data from GDS.
+    return: [{'text': port, 'type': portType, 'xy': "(x, y)",
+              'size': (width, height), 'winding': R|L}, ...]
+    """
+    myUsePortFile = theChip.find('portFile') is not None:
+    if myUsePortFile:
+        myPortFileName = theChip.find('portFile').text
+        try:
+            with open(myPortFileName) as myPortFile:
+                myPortData = json.load(myPortFile)
+            print("INFO: read port data for instance",
+                  theChip.find('instance').text, "from", myPortFileName)
+            theInstance['source'] = "file"
+        except Exception as error:
+            if getattr(error, 'errno', 0) == errno.ENOENT:  # non existent files are not an error
+                pass
+            else:
+                print(error)
+                print("Warning: Could not read port data for instance",
+                      theChip.find('instance').text, "from", myPortFileName)
+            myPortData = None
+    if not myPortData:
+        myPortData = GetGdsPortData(theChip, theUserUnits)
+        theInstance['source'] = "GDS"
+        if myUsePortFile:
+            print("INFO: writing port data for instance",
+                  theChip.find('instance').text, "to", myPortFileName)
+            with open(myPortFileName, "w", encoding='utf-8') as myPortFile:
+                json.dump(myPortData, myPortFile, ensure_ascii=False, indent=2)
+    return myPortData
+
 def PromoteChipPorts(theChip, theInstances, theUserUnits):
     """Promote individual chip ports to virtual top level.
 
@@ -506,8 +591,9 @@ def PromoteChipPorts(theChip, theInstances, theUserUnits):
     else:
         myMasterSubckt = theChip.find('subcktName').text
     myCdlPortMap = MapCdlPorts(myMasterSubckt, myCdlFile, theInstances[myInstanceName]['nets'])
-    myGdsPortData = GetGdsPortData(theChip, theUserUnits)
-    myMappedPorts = {}  # {(instanceName, "(x, y)", portType, topNet): (portName, winding), ...}
+    myGdsPortData = LoadGdsPortData(theChip, theUserUnits, theInstances[myInstanceName])
+    myMappedPorts = {}  # {(instanceName, "(x, y)", portType, topNet):
+                        #  (portName, size, winding), ...}
     for net_it in myCdlPortMap:  # Added entry to handle connected CDL nets without ports
         myKey = (myInstanceName, "", "", myCdlPortMap[net_it])
         myMappedPorts[myKey] = net_it
@@ -516,7 +602,7 @@ def PromoteChipPorts(theChip, theInstances, theUserUnits):
             if port_it['text'] in myCdlPortMap:
                 myKey = (myInstanceName, port_it['xy'], port_it['type'],
                          myCdlPortMap[port_it['text']])
-                myMappedPorts[myKey] = (port_it['text'], port_it['winding'])
+                myMappedPorts[myKey] = (port_it['text'], port_it['size'], port_it['winding'])
             else:
                 print("ERROR: layout port " + port_it['text']
                       + " at " + port_it['xy'] + " of " + theChip.find('layoutName').text
@@ -525,7 +611,7 @@ def PromoteChipPorts(theChip, theInstances, theUserUnits):
         else:  # unlabeled port
             if port_it['type'] == "TSV":
                 myKey = (myInstanceName, port_it['xy'], port_it['type'], "")
-                myMappedPorts[myKey] = ("", "")
+                myMappedPorts[myKey] = ("", port_it['size'], "")
             else:
                 print("ERROR: " + port_it['type'] + " without text at " + port_it['xy'])
     return myMappedPorts
@@ -656,7 +742,7 @@ def MultiplePorts(thePortIndex, theSortedPorts, thePrintedPorts):
     return False
 
 def GetSlicePort(theInstance, theXyList, theType, theText, thePortData):
-    """Returns (portName, winding) of slice if found."""
+    """Returns (portName, size, winding) of slice if found."""
     for xy_it in theXyList:
         myKey = (theInstance, xy_it, theType, theText)
         if myKey in thePortData:
@@ -667,12 +753,13 @@ def PrintReportHeader(theOutputFile, theSortedInstances, theInstances):
     """Print report file heading."""
     myOutput = "Check,Port,Type,X,Y"
     for key_it in theSortedInstances:
-        myOutput += "," + key_it + "(" + theInstances[key_it]['master'] + ")"
+        myOutput += ( "," + key_it + "(" + theInstances[key_it]['master'] + ")<-"
+                      + theInstances[key_it]['source'] )
     theOutputFile.write(myOutput + "\n")
     
 def CheckPortData(thePortData, theInstanceOrder, theInstances, theTolerance,
                   theOutputFile, theNetConnections):
-    """Check the promoted ports' alignment and winding."""
+    """Check the promoted ports' alignment, size and winding."""
     (mySortedPorts, myBlankPorts) = CreatePortLists(thePortData, theTolerance)
     myPrintedPorts = set()
     myUsedCoils = set()
@@ -697,12 +784,18 @@ def CheckPortData(thePortData, theInstanceOrder, theInstances, theTolerance,
         for instance_it in theInstanceOrder:
             mySlicePort = GetSlicePort(instance_it, myXyList, myType, myText, thePortData)
             if mySlicePort:
-                (mySliceText, myWinding) = mySlicePort
-                if myType.startswith("COIL"):
+                (mySliceText, mySize, myWinding) = mySlicePort
+                if myType.startswith("COIL"):  # Coils check winding
                     mySliceText += "@" + myWinding
                     if myConnectionCount == 0:
                         myPortWinding = myWinding
                     elif myPortWinding != myWinding:
+                        myPortOk = "X"
+                elif myType.startswith("TSV"):  # TSV must be same shape
+                    mySliceText += "(" + str(mySize[0]) + "x" + str(mySize[1]) + ")"
+                    if myConnectionCount == 0:
+                        myPortSize = mySize
+                    elif mySize[0] != myPortSize[0] or mySize[1] != myPortSize[1]
                         myPortOk = "X"
                 myOutput += "," + mySliceText
                 myConnectionCount += 1
@@ -736,14 +829,14 @@ def main(argv):
     if not (1 <= len(argv) <= 2):
         print("usage: stic.py sticXmlFile [outputFile]")
         return
-    print("STIC: Stacked Terminal Interconnect Check version 1.03.02")
+    DisplayLicense()
     print("Reading settings...")
     myStackedChip = ET.parse(argv[0]).getroot()  # Parse the xml file.
     PrintParameters(myStackedChip)
     myUserUnits = myStackedChip.find('userUnits').text
     myTolerance = float(myStackedChip.find('tolerance').text)
     (myInstances, myNetConnections) = ReadTopCdlFile(myStackedChip)
-    myPortData = {}  # {(instanceName, "(x, y)", portType, topNet): (portName, winding), ...}
+    myPortData = {}  # {(instanceName, "(x, y)", portType, topNet): (portName, size, winding), ...}
     for chip_it in myStackedChip.findall('chip'):
         myPortData.update(PromoteChipPorts(chip_it, myInstances, myUserUnits))
     if len(argv) == 2:

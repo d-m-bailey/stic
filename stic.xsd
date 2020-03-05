@@ -1,8 +1,8 @@
-<?xml version="1.0" encoding="utf-8"?>
-<xs:schema attributeFormDefault="unqualified" elementFormDefault="qualified" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="XMLSchema.xsd">
+﻿<?xml version="1.0" encoding="utf-8"?>
+<xs:schema attributeFormDefault="unqualified" elementFormDefault="qualified" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.w3.org/2001/XMLSchema XMLSchema.xsd">
   <xs:annotation>
     <xs:documentation>
-      This is a schema that defines the xml for stic (積層端子位地チェック) input. </xs:documentation>
+      This is a schema that defines the xml for stic (積層端子位置チェック) input. </xs:documentation>
   </xs:annotation>
   <xs:element name="stackedChip">
     <xs:annotation>
@@ -116,6 +116,16 @@
       <xs:element name="gdsFileName">
         <xs:annotation>
           <xs:documentation>The GDS file name that contains the chip definition.</xs:documentation>
+        </xs:annotation>
+        <xs:simpleType>
+          <xs:restriction base="xs:string">
+            <xs:pattern value="[\S]*" />
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:element>
+      <xs:element name="portFile" minOccurs="0">
+        <xs:annotation>
+          <xs:documentation>Optionally write/read port definitions to/from text file.</xs:documentation>
         </xs:annotation>
         <xs:simpleType>
           <xs:restriction base="xs:string">
