@@ -54,7 +54,7 @@ import errno
 
 def DisplayLicense():
     """Display GPLv3 reference."""
-    print("stic: Stacked terminal interconnect Checker: v1.1.0")
+    print("stic: Stacked terminal interconnect Checker: v1.1.1")
     print("Copyright (C) 2016-2020  D. Mitch Bailey")
     print("This program comes with ABSOLUTELY NO WARRANTY.")
     print("This is free software licensed under GPLv3,")
@@ -415,7 +415,7 @@ def LoadGdsText(theChip, theTopStructure):
     return myTextList
 
 def UserScale(thePoint, theScale):
-    """Returns thePoint scaled to used coordinates"""
+    """Returns thePoint scaled to user coordinates"""
     myX = thePoint[0][0] / theScale
     myY = thePoint[0][1] / theScale
     return("({0:.12g}, {1:.12g})".format(myX, myY))
@@ -428,10 +428,10 @@ def GetSize(theBox, theCenter, theTopLayout):
     """
     myWidth = abs(theBox[0][0] - theBox[1][0])
     myHeight = abs(theBox[0][1] - theBox[1][1])
-    if ( (theBox[0][0] + theBox[1][0]) / 2 != theCenter[0]
-         or (theBox[1][1] + theBox[1][1]) / 2 != theCenter[1] ):
-        print("Warning: port is not centered at", theCenter, "in", theTopLayout)
-    return(list(myWidth, myHeight))
+    if ( (theBox[0][0] + theBox[1][0]) / 2 != theCenter[0][0]
+         or (theBox[1][1] + theBox[1][1]) / 2 != theCenter[0][1] ):
+        print("Warning: port is not centered at ", str(theCenter[0]) + "in" + theTopLayout)
+    return([myWidth, myHeight])
 
 def AssignPorts(thePortList, theTextList, theTopLayout, theDbuPerUU):
     """Return a list of text with port type centered at port origin.
@@ -447,7 +447,6 @@ def AssignPorts(thePortList, theTextList, theTopLayout, theDbuPerUU):
     for text_it in theTextList:
         myTextFound = False
         for port_it in thePortList:
-            (myWidth, myHeight) = GetSize(port_it['box'], port_it['xy'], theTopLayout) 
             if BoxContains(port_it['box'], text_it['xy'][0]):
                 if myTextFound and myXY != port_it['xy']:
                     print("Warning: Text in multiple ports: " + text_it['text']
@@ -495,19 +494,19 @@ def AssignPorts(thePortList, theTextList, theTopLayout, theDbuPerUU):
 def TranslateChipPorts(thePortList, theOrientation, theTranslation, theScale):
     """Return a list of ports and transformed to final position in user units.
     return: [{'text': portName, 'type': portType, 'xy': position,
-              'size': (width, height), 'winding': L|R}, ...]
+              'size': "(width x height)", 'winding': L|R}, ...]
     """
     myInstancePortList = []  # [{'text': port, 'type': portType, 'xy': "(x, y)",
-                             #   'size': (width, height), 'winding': R|L}, ...]
+                             #   'size': "(width x height)", 'winding': R|L}, ...]
     myTransform = GetTransform(theOrientation, theTranslation)
     mySwitchSize = "R90" in theOrientation or "R270" in theOrientation
     for port_it in thePortList:
+        mySize = port_it['size'].reverse() if mySwitchSize else port_it['size']
         myInstancePortList.append({'text': port_it['text'],
                                    'type': port_it['type'],
                                    'xy': UserScale(Transform(port_it['xy'], myTransform),
                                                    theScale),
-                                   'size': ( port_it['size'].reverse() if mySwitchSize
-                                             else port_it['size'] )
+                                   'size': UserScale([mySize], theScale).replace(", ", "x"),
                                    'winding': FlipPort(port_it['winding'], theOrientation)})
     return myInstancePortList
 
@@ -515,7 +514,7 @@ def GetGdsPortData(theChip, theUserUnits):
     """Translate GDS port data to final positions.
 
     return: [{'text': port, 'type': portType, 'xy': "(x, y)",
-              'size': (width, height), 'winding': R|L}, ...]
+              'size': "(width x height)", 'winding': R|L}, ...]
     Note: x, y in user units.
     """
     myLayoutName = theChip.find('layoutName').text
@@ -550,39 +549,39 @@ def LoadGdsPortData(theChip, theUserUnits, theInstance):
     modifies:
       theInstance['source']: "file" if port data from file, "GDS" if port data from GDS.
     return: [{'text': port, 'type': portType, 'xy': "(x, y)",
-              'size': (width, height), 'winding': R|L}, ...]
+              'size': "(width x height)", 'winding': R|L}, ...]
     """
-    myUsePortFile = theChip.find('portFile') is not None:
+    myUsePortFile = theChip.find('portFile') is not None
     if myUsePortFile:
         myPortFileName = theChip.find('portFile').text
         try:
             with open(myPortFileName) as myPortFile:
                 myPortData = json.load(myPortFile)
-            print("INFO: read port data for instance",
-                  theChip.find('instance').text, "from", myPortFileName)
+            print("INFO: read port data for instance" +
+                  theChip.find('instanceName').text + " from " + myPortFileName)
             theInstance['source'] = "file"
         except Exception as error:
             if getattr(error, 'errno', 0) == errno.ENOENT:  # non existent files are not an error
                 pass
             else:
                 print(error)
-                print("Warning: Could not read port data for instance",
-                      theChip.find('instance').text, "from", myPortFileName)
+                print("Warning: Could not read port data for instance" +
+                      theChip.find('instanceName').text + " from " + myPortFileName)
             myPortData = None
     if not myPortData:
         myPortData = GetGdsPortData(theChip, theUserUnits)
         theInstance['source'] = "GDS"
         if myUsePortFile:
-            print("INFO: writing port data for instance",
-                  theChip.find('instance').text, "to", myPortFileName)
-            with open(myPortFileName, "w", encoding='utf-8') as myPortFile:
+            print("INFO: writing port data for instance" +
+                  theChip.find('instanceName').text + " to " + myPortFileName)
+            with open(myPortFileName, "w") as myPortFile:
                 json.dump(myPortData, myPortFile, ensure_ascii=False, indent=2)
     return myPortData
 
 def PromoteChipPorts(theChip, theInstances, theUserUnits):
     """Promote individual chip ports to virtual top level.
 
-    return: {(instanceName, "(x, y)", portType, topNet): (portName, winding), ...}
+    return: {(instanceName, "(x, y)", portType, topNet): (portName, size, winding), ...}
     """
     myInstanceName = theChip.find('instanceName').text
     myCdlFile = theChip.find('cdlFileName').text
@@ -596,7 +595,7 @@ def PromoteChipPorts(theChip, theInstances, theUserUnits):
                         #  (portName, size, winding), ...}
     for net_it in myCdlPortMap:  # Added entry to handle connected CDL nets without ports
         myKey = (myInstanceName, "", "", myCdlPortMap[net_it])
-        myMappedPorts[myKey] = net_it
+        myMappedPorts[myKey] = (net_it, "", "")
     for port_it in myGdsPortData:
         if port_it['text']:
             if port_it['text'] in myCdlPortMap:
@@ -792,10 +791,10 @@ def CheckPortData(thePortData, theInstanceOrder, theInstances, theTolerance,
                     elif myPortWinding != myWinding:
                         myPortOk = "X"
                 elif myType.startswith("TSV"):  # TSV must be same shape
-                    mySliceText += "(" + str(mySize[0]) + "x" + str(mySize[1]) + ")"
+                    mySliceText += mySize[1]
                     if myConnectionCount == 0:
                         myPortSize = mySize
-                    elif mySize[0] != myPortSize[0] or mySize[1] != myPortSize[1]
+                    elif mySize[0] != myPortSize:
                         myPortOk = "X"
                 myOutput += "," + mySliceText
                 myConnectionCount += 1
