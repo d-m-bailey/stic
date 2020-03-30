@@ -54,7 +54,7 @@ import errno
 
 def DisplayLicense():
     """Display GPLv3 reference."""
-    print("stic: Stacked terminal interconnect Checker: v1.3.0")
+    print("stic: Stacked terminal interconnect Checker: v1.3.1")
     print("Copyright (C) 2016-2020  D. Mitch Bailey")
     print("This program comes with ABSOLUTELY NO WARRANTY.")
     print("This is free software licensed under GPLv3,")
@@ -848,28 +848,28 @@ def CheckPortData(thePortData, theInstanceOrder, theInstances, theTolerance,
                         myNetInstanceSet.add(instance_it)
         myLastText = myText
         theOutputFile.write(myPortStatus + "," + myOutput + "\n")
-        for portKey_it in thePortData:  # Check blank ports
-            (myInstance, myXY, myType, myText) = portKey_it
-            if myText == "" and portKey_it not in myUsedBlankPorts:
-                myPortStatus = "BLANK"
-                myPortSize = 0
-                (myX, myY) = literal_eval(myXY)
-                myOutput = "," + myType + "," + "{:.12g}, {:.12g}",format(myX, myY)
-                for instance_it in theInstanceOrder:
-                    myBlankPortKey = HasBlankPort(instance_it, myType, myXY, theTolerance,
-                                                  myBlankPorts, thePortData)
-                    if myBlankPortKey:  # found blank port
-                        (mySliceText, mySize, myWinding) = thePortData[myBlankPortKey]
-                        myUsedBlankPorts.add(myBlankPortKey)
-                        myOutput += ", " + mySize
-                        if myPortSize == 0:
-                            myPortSize = mySize
-                        elif mySize != myPortSize:
-                            myPortStatus = "SIZE"  # overrides "BLANK"
-                    else:  # no matching port for this instance
-                        myOutput += ",?"
-                        myPortStatus = "NO_TSV"  # overrides "BLANK"
-                theOutputFile.write(myPortStatus + "," + myOutput + "\n")
+    for portKey_it in thePortData:  # Check blank ports
+        (myInstance, myXY, myType, myText) = portKey_it
+        if myText == "" and portKey_it not in myUsedBlankPorts:
+            myPortStatus = "BLANK"
+            myPortSize = 0
+            (myX, myY) = literal_eval(myXY)
+            myOutput = "," + myType + "," + "{:.12g}, {:.12g}",format(myX, myY)
+            for instance_it in theInstanceOrder:
+                myBlankPortKey = HasBlankPort(instance_it, myType, myXY, theTolerance,
+                                              myBlankPorts, thePortData)
+                if myBlankPortKey:  # found blank port
+                    (mySliceText, mySize, myWinding) = thePortData[myBlankPortKey]
+                    myUsedBlankPorts.add(myBlankPortKey)
+                    myOutput += ", " + mySize
+                    if myPortSize == 0:
+                        myPortSize = mySize
+                    elif mySize != myPortSize:
+                        myPortStatus = "SIZE"  # overrides "BLANK"
+                else:  # no matching port for this instance
+                    myOutput += ",?"
+                    myPortStatus = "NO_TSV"  # overrides "BLANK"
+            theOutputFile.write(myPortStatus + "," + myOutput + "\n")
 
 def PrintUsage():
     print("usage: stic.py [-t] sticXmlFile [outputFile]")
