@@ -54,7 +54,7 @@ import errno
 
 def DisplayLicense():
     """Display GPLv3 reference."""
-    print("stic: Stacked terminal interconnect Checker: v1.2.1")
+    print("stic: Stacked terminal interconnect Checker: v1.3.0")
     print("Copyright (C) 2016-2020  D. Mitch Bailey")
     print("This program comes with ABSOLUTELY NO WARRANTY.")
     print("This is free software licensed under GPLv3,")
@@ -713,7 +713,7 @@ def WithinTolerance(theFirstXY, theSecondXY, theTolerance):
     return True
 
 def HasBlankPort(theInstance, theType, theXY, theTolerance, theBlankPorts, thePortData):
-    """True if there is a blank port on instance within tolerance."""
+    """Returns the blank port on instance within tolerance."""
     myKeyList = CreateSearchList(theXY, theTolerance)
     myPortFound = False
     for key_it in myKeyList:
@@ -723,8 +723,8 @@ def HasBlankPort(theInstance, theType, theXY, theTolerance, theBlankPorts, thePo
                 if WithinTolerance(theXY, blankXY_it, theTolerance):     
                     myPortKey = (theInstance, blankXY_it, theType, "")
                     if myPortKey in thePortData:
-                        return True
-    return False
+                        return myPortKey
+    return None
 
 def MultiplePorts(thePortIndex, theSortedPorts, thePrintedPorts):
     """True if there are multiple ports for the text."""
@@ -761,9 +761,12 @@ def CheckPortData(thePortData, theInstanceOrder, theInstances, theTolerance,
     myPrintedPorts = set()
     myUsedCoils = set()
     myLastText = ""
+    myUsedBlankPorts = set()
     for port_it in range(len(mySortedPorts)):
         (myText, myType, myXY) = mySortedPorts[port_it]
         myPortStatus = "OK"
+        if myText != myLastText:
+            myNetInstanceSet = set()
         if (myText, myXY) in myPrintedPorts: continue
         if myXY == "":
             if myText == myLastText or myText not in theNetConnections: continue
@@ -780,6 +783,8 @@ def CheckPortData(thePortData, theInstanceOrder, theInstances, theTolerance,
             if myText == "????":
                 myPortStatus = "NO_NET"
         myConnectionCount = 0
+        myPortSize = 0
+        myPortInstanceSet = set()
         for instance_it in theInstanceOrder:
             mySlicePort = GetSlicePort(instance_it, myXyList, myType, myText, thePortData)
             if mySlicePort:
@@ -794,34 +799,77 @@ def CheckPortData(thePortData, theInstanceOrder, theInstances, theTolerance,
                         myPortStatus = "WINDING"  # overrides "NO_TEXT"
                 elif myType.startswith("TSV"):  # TSV must be same shape
                     mySliceText += " " + mySize
-                    if myConnectionCount == 0:
+                    if myPortSize == 0:
                         myPortSize = mySize
                     elif mySize != myPortSize:
                         myPortStatus = "SIZE"  # overrides "NO_TEXT"
                 myOutput += "," + mySliceText
                 myConnectionCount += 1
+                myPortInstanceSet.add(instance_it)
             else:  # No port on this chip
                 if myType.startswith("COIL"):  # Coils do not need ports on every chip
                     myOutput += ", "
                 elif myType.startswith("TSV"):  # TSV must have port or blank on every chip
-                    if HasBlankPort(instance_it, myType, myXY, theTolerance,
-                                    myBlankPorts, thePortData):
-                        myOutput += ", "                   
+                    myBlankPortKey = HasBlankPort(instance_it, myType, myXY, theTolerance,
+                                                  myBlankPorts, thePortData)
+                    if myBlankPortKey:  # found blank port
+                        (mySliceText, mySize, myWinding) = thePortData[myBlankPortKey]
+                        myUsedBlankPorts.add(myBlankPortKey)
+                        myOutput += ", " + mySize
+                        if myPortSize == 0:
+                            myPortSize = mySize
+                        elif mySize != myPortSize:
+                            myPortStatus = "SIZE"  # overrides "NO_TEXT"
                     else:  # no matching port for this instance
                         myOutput += ",?"
                         myPortStatus = "NO_TSV"
                 else:  # dummy port
                     # test for use!
                     myOutput += ", "
-        if myPortStatus == "OK" and myConnectionCount < 2:
-            # All ports must have 2 or more connections
-            myPortStatus = "FLOATING"
         if myType.startswith("COIL"):  # Coil text must be unique
+            if myPortStatus == "OK" and myConnectionCount < 2:
+                # All TCI ports must have 2 or more connections
+                myPortStatus = "FLOATING"
             if myText in myUsedCoils or MultiplePorts(port_it, mySortedPorts, myPrintedPorts):
                 myPortStatus = "MULTI_TCI"
             myUsedCoils.add(myText)
+        elif myType.startswith("TSV"):  # Ports with same name must be connected on at least 1 slice
+            if len(myNetInstanceSet) == 0:  # New net name
+                myNetInstanceSet = myPortInstanceSet.copy()
+            elif myPortStatus == "OK":  # Same net with no errors yet
+                myPortStatus = "NO_CONNECTION"
+                # may flag false error if connection on later port
+                for instance_it in myPortInstanceSet:
+                    if instance_it in myNetInstanceSet:
+                        myPortStatus = "OK"
+                        break
+                if myPortStatus == "OK":  # if at least one slice connected, add all slices for port
+                    for instance_it in myPortInstanceSet:
+                        myNetInstanceSet.add(instance_it)
         myLastText = myText
         theOutputFile.write(myPortStatus + "," + myOutput + "\n")
+        for portKey_it in thePortData:  # Check blank ports
+            (myInstance, myXY, myType, myText) = portKey_it
+            if myText == "" and portKey_it not in myUsedBlankPorts:
+                myPortStatus = "BLANK"
+                myPortSize = 0
+                (myX, myY) = literal_eval(myXY)
+                myOutput = "," + myType + "," + "{:.12g}, {:.12g}",format(myX, myY)
+                for instance_it in theInstanceOrder:
+                    myBlankPortKey = HasBlankPort(instance_it, myType, myXY, theTolerance,
+                                                  myBlankPorts, thePortData)
+                    if myBlankPortKey:  # found blank port
+                        (mySliceText, mySize, myWinding) = thePortData[myBlankPortKey]
+                        myUsedBlankPorts.add(myBlankPortKey)
+                        myOutput += ", " + mySize
+                        if myPortSize == 0:
+                            myPortSize = mySize
+                        elif mySize != myPortSize:
+                            myPortStatus = "SIZE"  # overrides "BLANK"
+                    else:  # no matching port for this instance
+                        myOutput += ",?"
+                        myPortStatus = "NO_TSV"  # overrides "BLANK"
+                theOutputFile.write(myPortStatus + "," + myOutput + "\n")
 
 def PrintUsage():
     print("usage: stic.py [-t] sticXmlFile [outputFile]")
