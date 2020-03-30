@@ -54,7 +54,7 @@ import errno
 
 def DisplayLicense():
     """Display GPLv3 reference."""
-    print("stic: Stacked terminal interconnect Checker: v1.1.2")
+    print("stic: Stacked terminal interconnect Checker: v1.1.3")
     print("Copyright (C) 2016-2020  D. Mitch Bailey")
     print("This program comes with ABSOLUTELY NO WARRANTY.")
     print("This is free software licensed under GPLv3,")
@@ -431,8 +431,8 @@ def GetSize(theBox, theCenter, theTopLayout):
     myWidth = abs(theBox[0][0] - theBox[1][0])
     myHeight = abs(theBox[0][1] - theBox[1][1])
     if ( (theBox[0][0] + theBox[1][0]) / 2 != theCenter[0][0]
-         or (theBox[1][1] + theBox[1][1]) / 2 != theCenter[0][1] ):
-        print("Warning: port is not centered at ", str(theCenter[0]) + "in" + theTopLayout)
+         or (theBox[0][1] + theBox[1][1]) / 2 != theCenter[0][1] ):
+        print("Warning: port is not centered at ", str(theCenter[0]) + " in " + theTopLayout)
     return([myWidth, myHeight])
 
 def AssignPorts(thePortList, theTextList, theTopLayout, theDbuPerUU):
