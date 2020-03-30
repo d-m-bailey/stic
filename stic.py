@@ -54,7 +54,7 @@ import errno
 
 def DisplayLicense():
     """Display GPLv3 reference."""
-    print("stic: Stacked terminal interconnect Checker: v1.1.1")
+    print("stic: Stacked terminal interconnect Checker: v1.1.2")
     print("Copyright (C) 2016-2020  D. Mitch Bailey")
     print("This program comes with ABSOLUTELY NO WARRANTY.")
     print("This is free software licensed under GPLv3,")
@@ -183,6 +183,8 @@ def PrintParameters(theStackedChip):
               + "; Offset: (" + chip_it.find('offset').find('x').text
               + ", " + chip_it.find('offset').find('y').text + ")"
               + "; Shrink: " + chip_it.find('shrink').text)
+        if chip_it.find('portFile') is not None:
+            print(" Text file name: " + chip_it.find('portFile').text)
         for port_it in chip_it.findall('port'):
             myPort = " Port: " + port_it.find('type').text + " " + GetLayerType(port_it)
             myPort += "; Text: " + GetTextType(port_it)
@@ -557,7 +559,7 @@ def LoadGdsPortData(theChip, theUserUnits, theInstance):
         try:
             with open(myPortFileName) as myPortFile:
                 myPortData = json.load(myPortFile)
-            print("INFO: read port data for instance" +
+            print("INFO: read port data for instance " +
                   theChip.find('instanceName').text + " from " + myPortFileName)
             theInstance['source'] = "file"
         except Exception as error:
@@ -565,14 +567,14 @@ def LoadGdsPortData(theChip, theUserUnits, theInstance):
                 pass
             else:
                 print(error)
-                print("Warning: Could not read port data for instance" +
+                print("Warning: Could not read port data for instance " +
                       theChip.find('instanceName').text + " from " + myPortFileName)
             myPortData = None
     if not myPortData:
         myPortData = GetGdsPortData(theChip, theUserUnits)
         theInstance['source'] = "GDS"
         if myUsePortFile:
-            print("INFO: writing port data for instance" +
+            print("INFO: writing port data for instance " +
                   theChip.find('instanceName').text + " to " + myPortFileName)
             with open(myPortFileName, "w") as myPortFile:
                 json.dump(myPortData, myPortFile, ensure_ascii=False, indent=2)
@@ -791,10 +793,10 @@ def CheckPortData(thePortData, theInstanceOrder, theInstances, theTolerance,
                     elif myPortWinding != myWinding:
                         myPortOk = "X"
                 elif myType.startswith("TSV"):  # TSV must be same shape
-                    mySliceText += mySize[1]
+                    mySliceText += mySize
                     if myConnectionCount == 0:
                         myPortSize = mySize
-                    elif mySize[0] != myPortSize:
+                    elif mySize != myPortSize:
                         myPortOk = "X"
                 myOutput += "," + mySliceText
                 myConnectionCount += 1
