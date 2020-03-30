@@ -54,7 +54,7 @@ import errno
 
 def DisplayLicense():
     """Display GPLv3 reference."""
-    print("stic: Stacked terminal interconnect Checker: v1.3.1")
+    print("stic: Stacked terminal interconnect Checker: v1.3.2")
     print("Copyright (C) 2016-2020  D. Mitch Bailey")
     print("This program comes with ABSOLUTELY NO WARRANTY.")
     print("This is free software licensed under GPLv3,")
@@ -827,12 +827,12 @@ def CheckPortData(thePortData, theInstanceOrder, theInstances, theTolerance,
                     # test for use!
                     myOutput += ", "
         if myType.startswith("COIL"):  # Coil text must be unique
-            if myPortStatus == "OK" and myConnectionCount < 2:
-                # All TCI ports must have 2 or more connections
-                myPortStatus = "FLOATING"
             if myText in myUsedCoils or MultiplePorts(port_it, mySortedPorts, myPrintedPorts):
                 myPortStatus = "MULTI_TCI"
             myUsedCoils.add(myText)
+            if myPortStatus == "OK" and myConnectionCount < 2:
+                # All TCI ports must have 2 or more connections
+                myPortStatus = "FLOATING"
         elif myType.startswith("TSV"):  # Ports with same name must be connected on at least 1 slice
             if len(myNetInstanceSet) == 0:  # New net name
                 myNetInstanceSet = myPortInstanceSet.copy()
@@ -854,7 +854,7 @@ def CheckPortData(thePortData, theInstanceOrder, theInstances, theTolerance,
             myPortStatus = "BLANK"
             myPortSize = 0
             (myX, myY) = literal_eval(myXY)
-            myOutput = "," + myType + "," + "{:.12g}, {:.12g}",format(myX, myY)
+            myOutput = "," + myType + "," + "{:.12g}, {:.12g}".format(myX, myY)
             for instance_it in theInstanceOrder:
                 myBlankPortKey = HasBlankPort(instance_it, myType, myXY, theTolerance,
                                               myBlankPorts, thePortData)
