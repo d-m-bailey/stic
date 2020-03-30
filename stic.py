@@ -54,7 +54,7 @@ import errno
 
 def DisplayLicense():
     """Display GPLv3 reference."""
-    print("stic: Stacked terminal interconnect Checker: v1.2.0")
+    print("stic: Stacked terminal interconnect Checker: v1.2.1")
     print("Copyright (C) 2016-2020  D. Mitch Bailey")
     print("This program comes with ABSOLUTELY NO WARRANTY.")
     print("This is free software licensed under GPLv3,")
@@ -474,7 +474,7 @@ def AssignPorts(thePortList, theTextList, theTopLayout, theDbuPerUU):
                     myXY = port_it['xy']
         if not myTextFound:
             myUnmapCount += 1
-    myBlankPortCount = 0
+    myMissingTextCount = 0
     for port_it in thePortList:
         if not 'assigned' in port_it:  # Check blank ports.
             if port_it['textLayer'] == "no text":
@@ -552,7 +552,7 @@ def LoadPortData(theChip, theUserUnits, theInstance, theUseText):
     return: [{'text': port, 'type': portType, 'xy': "(x, y)",
               'size': "(width x height)", 'winding': R|L}, ...]
     """
-    myPortFileName = theChip.find('portFile') if theChip.find('portFile') is not None else ""
+    myPortFileName = theChip.find('portFile').text if theChip.find('portFile') is not None else ""
     if theUseText:  # port data from text file
         if myPortFileName == "":
             print("ERROR: 'portFile' of " + theChip.find('instanceName').text
@@ -832,8 +832,9 @@ def main(argv):
 
     usage: stic.py sticXmlFile [outputFile]
     """
+    DisplayLicense()
     try:
-        myOptions, argv, = getopt.getopt(argv, "th", ["text", "help"])
+        myOptions, argv = getopt.getopt(argv, "th", ["text", "help"])
     except getopt.GetoptError as myError:
         print(myError)
         PrintUsage()
@@ -848,7 +849,6 @@ def main(argv):
     if not (1 <= len(argv) <= 2):
         PrintUsage()
         sys.exit(2)
-    DisplayLicense()
     print("Reading settings...")
     myStackedChip = ET.parse(argv[0]).getroot()  # Parse the xml file.
     PrintParameters(myStackedChip)
