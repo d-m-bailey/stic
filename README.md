@@ -4,10 +4,6 @@ Stacked-chip Terminal Interconnectivity Check
 
 Checks the terminal positions for alignment on a set of stacked chips.
 
-TSV ports must exist on every chip (blank ports allowed).
-
-COIL ports must have the same winding direction.
-
 <details>
 <summary>Input is an XML file defining the following:</summary>
   
@@ -36,6 +32,22 @@ COIL ports must have the same winding direction.
 </details>
       
 Output is a CSV file listing each port, xy, port type, chip connection(winding/size) and check result.
+
+<details>
+  <summary> Check result codes:</summary>
+  
+  + OK: no error
+  + NO_PORT: CDL net without layout port
+  + NO_NET: layout port witout CDL net
+  + NO_TEXT: expected text for layout port missing
+  + WINDING: coil direction reversed
+  + SIZE: TSV size mismatch
+  + NO_TSV: missing TSV on slice
+  + MULTI_TCI: multiple coils for same net
+  + FLOATING: only one coil
+  + NO_CONNECTION: TSV ports not connected across all slices
+  + BLANK: only through TSV
+</details>
     
 stic.xsd is the schema for the xml file
 
