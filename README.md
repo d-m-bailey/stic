@@ -9,7 +9,7 @@ TSV ports must exist on every chip (blank ports allowed).
 COIL ports must have the same winding direction.
 
 <details>
-<summary>Input is an xml file defining the following:</summary>
+<summary>Input is an XML file defining the following:</summary>
   
 + top CDL subckt name
 + top CDL file name
@@ -50,6 +50,12 @@ Requires python-gdsii, numpy
 No installation. After downloading, 
 
     python stic.py [-t] XMLfile [outputFile]
+    
+Contribute
+----------
+
+- Issue Tracker: https://github.com/d-m-bailey/stic/issues
+- Source Code: https://github.com/d-m-bailey/stic
 
 Support
 -------
